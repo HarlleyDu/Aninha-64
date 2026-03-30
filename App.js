@@ -257,7 +257,7 @@ Notifications.setNotificationHandler({
 });
 
 function ConsistencyCircle({ historico, dataInicio, tema }) {
-  const TOTAL = 28; const RADIUS = (SW - 80) / 2; const DOT = 14;
+  const TOTAL = 28; const RADIUS = (SW - 200) / 2; const DOT = 10; // FIX: menor
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => { Animated.timing(anim, { toValue: 1, duration: 900, useNativeDriver: true }).start(); }, []);
   const scale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] });
@@ -1268,8 +1268,14 @@ export default function App() {
       {/* Header */}
       <View style={s.header}>
         <TouchableOpacity style={s.headerLeft} onPress={() => setAbaAtiva('perfil')}>
-          <View style={{ position: 'relative', width: 40, height: 40 }}>
-            {fotoAtual ? <Image source={{ uri: fotoAtual }} style={s.avatarHeader} /> : <View style={s.avatarVazio}><Text>👤</Text></View>}
+          <View style={{ position: 'relative', width: 44, height: 44 }}>
+            {(() => {
+              const moldura = molduraEquipada ? getMolduraById(molduraEquipada) : null;
+              const corBorda = moldura ? (moldura.cor !== 'rainbow' ? moldura.cor : '#ffaa44') : tema.primary;
+              return fotoAtual
+                ? <Image source={{ uri: fotoAtual }} style={[s.avatarHeader, { borderWidth: 2, borderColor: corBorda }]} />
+                : <View style={[s.avatarVazio, { borderWidth: 2, borderColor: corBorda }]}><Text>👤</Text></View>;
+            })()}
             {seloEquipado && (
               <View style={{ position: 'absolute', bottom: -4, right: -4, backgroundColor: '#000a', borderRadius: 10, padding: 1 }}>
                 <Text style={{ fontSize: 12 }}>{getSeloById(seloEquipado)?.emoji || '✨'}</Text>
@@ -1523,8 +1529,20 @@ export default function App() {
         {/* PERFIL */}
         {abaAtiva === 'perfil' && <>
           <View style={s.perfilCard}>
-            <TouchableOpacity onPress={escolherFotoGaleria}>
-              {fotoAtual ? <Image source={{ uri: fotoAtual }} style={s.fotoPerfil} /> : <View style={s.fotoPerfilVazio}><Text style={{ fontSize: 40 }}>📷</Text></View>}
+            <TouchableOpacity onPress={escolherFotoGaleria} style={{ position: 'relative' }}>
+              {(() => {
+                const moldura = molduraEquipada ? getMolduraById(molduraEquipada) : null;
+                const corBorda = moldura ? (moldura.cor !== 'rainbow' ? moldura.cor : '#ffaa44') : tema.primary;
+                const larguraBorda = moldura ? 5 : 3;
+                return fotoAtual
+                  ? <Image source={{ uri: fotoAtual }} style={[s.fotoPerfil, { borderColor: corBorda, borderWidth: larguraBorda }]} />
+                  : <View style={[s.fotoPerfilVazio, { borderColor: corBorda, borderWidth: larguraBorda }]}><Text style={{ fontSize: 40 }}>📷</Text></View>;
+              })()}
+              {seloEquipado && (
+                <View style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: '#000a', borderRadius: 14, padding: 3 }}>
+                  <Text style={{ fontSize: 18 }}>{getSeloById(seloEquipado)?.emoji || '✨'}</Text>
+                </View>
+              )}
             </TouchableOpacity>
             <Text style={s.perfilNome}>{nomeAtual}</Text>
             {tituloEquipado && titulosDesbloqueados[tituloEquipado] && (
@@ -1601,8 +1619,8 @@ const makeStyles = (tema) => StyleSheet.create({
   avatarHeader:   { width: 40, height: 40, borderRadius: 20 },
   avatarVazio:    { width: 40, height: 40, borderRadius: 20, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' },
   iconBtn:        { width: 36, height: 36, borderRadius: 18, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' },
-  aba:            { paddingHorizontal: 14, paddingVertical: 12, alignItems: 'center' },
-  abaTxt:         { fontSize: 20, opacity: 0.4 },
+  aba:            { paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center' },
+  abaTxt:         { fontSize: 14, opacity: 0.4 },
   body:           { flex: 1 },
   bodyContent:    { padding: 20, paddingBottom: 40 },
   card:           { backgroundColor: tema.card, borderRadius: 24, padding: 30, alignItems: 'center', borderWidth: 2, marginBottom: 20 },
