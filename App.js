@@ -39,7 +39,7 @@ try {
   console.error("Firebase Init Error:", e);
 }
 
-const VERSAO_ATUAL  = "6.1.0";
+const VERSAO_ATUAL  = "alpha 0.0.1";
 const ADMIN_EMAIL   = "Harlleyduarte@gmail.com";
 const JANELA_INICIO = { h: 20, m: 30 };
 const JANELA_FIM    = { h: 20, m: 40 };
@@ -377,6 +377,38 @@ export default function App() {
   const fadeAmor = useRef(new Animated.Value(0)).current;
   const pulseBtn = useRef(new Animated.Value(1)).current;
   const [confete, setConfete] = useState(false);
+
+  // 🆕 NOVO alpha 0.0.1: Countdown em segundos até a Janela de Ouro
+  const [countdown, setCountdown] = useState('');
+  const [naJanela, setNaJanela] = useState(false);
+  useEffect(() => {
+    const tick = () => {
+      const agora = new Date();
+      const totalMin = agora.getHours() * 60 + agora.getMinutes();
+      const totalSeg = totalMin * 60 + agora.getSeconds();
+      const inicioSeg = JANELA_INICIO.h * 3600 + JANELA_INICIO.m * 60;
+      const fimSeg   = JANELA_FIM.h   * 3600 + JANELA_FIM.m   * 60;
+      if (totalSeg >= inicioSeg && totalSeg <= fimSeg) {
+        const restante = fimSeg - totalSeg;
+        const mm = Math.floor(restante / 60);
+        const ss = String(restante % 60).padStart(2, '0');
+        setCountdown(`🟢 Janela aberta! Fecha em ${mm}:${ss}`);
+        setNaJanela(true);
+      } else {
+        setNaJanela(false);
+        let alvo = new Date(); alvo.setHours(JANELA_INICIO.h, JANELA_INICIO.m, 0, 0);
+        if (alvo <= agora) alvo.setDate(alvo.getDate() + 1);
+        const diff = Math.floor((alvo - agora) / 1000);
+        const hh = Math.floor(diff / 3600);
+        const mm = Math.floor((diff % 3600) / 60);
+        const ss = String(diff % 60).padStart(2, '0');
+        setCountdown(`⏳ Janela em ${hh}h ${mm}m ${ss}s`);
+      }
+    };
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, []);
 
   // ── FIX SWIPE: 8 abas (removido 'conectar') ──
   const ABAS = ['home', 'calendario', 'ranking', 'loja', 'conquistas', 'mural', 'sugestoes', 'perfil'];
@@ -1141,6 +1173,24 @@ export default function App() {
           <TouchableOpacity style={s.adminBtn} onPress={adminLimparDiaHoje}><Text style={s.adminBtnTxt}>🗑️ Remover registro de hoje</Text></TouchableOpacity>
           <TouchableOpacity style={[s.adminBtn, { borderColor: '#ffaa00' }]} onPress={adminSetAntrixInfinito}><Text style={[s.adminBtnTxt, { color: '#ffaa00' }]}>💰 Antrix infinito (999999)</Text></TouchableOpacity>
           <TouchableOpacity style={[s.adminBtn, { borderColor: '#44ff44' }]} onPress={adminDesbloquearTodosItens}><Text style={[s.adminBtnTxt, { color: '#44ff44' }]}>🎨 Desbloquear todos itens</Text></TouchableOpacity>
+          {/* 🆕 NOVO alpha 0.0.1: Botão desbloquear TODAS as conquistas */}
+          <TouchableOpacity style={[s.adminBtn, { borderColor: '#ffcc00' }]} onPress={async () => {
+            const novas = {};
+            const titulosNovos = {};
+            for (const cat of Object.values(CONQUISTAS)) {
+              for (const c of cat) {
+                novas[c.id] = { desbloqueada: true, data: new Date().toISOString() };
+                if (c.titulo) titulosNovos[c.id] = { titulo: c.titulo, cor: c.corTitulo || '#aaa' };
+              }
+            }
+            setConquistasDesbloqueadas(novas);
+            setTitulosDesbloqueados(prev => ({ ...prev, ...titulosNovos }));
+            await set(ref(db, `usuarios/${authUser.uid}/conquistas`), novas);
+            await update(ref(db, `usuarios/${authUser.uid}/titulosDesbloqueados`), titulosNovos);
+            Alert.alert('✅ Admin', 'Todas as conquistas desbloqueadas!');
+          }}>
+            <Text style={[s.adminBtnTxt, { color: '#ffcc00' }]}>🏆 Desbloquear todas conquistas</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={[s.adminBtn, { borderColor: '#ff4444' }]} onPress={adminResetarLoja}><Text style={[s.adminBtnTxt, { color: '#ff4444' }]}>⚠️ Reset Antrix/Loja/Conquistas</Text></TouchableOpacity>
           <TouchableOpacity style={s.btnSecondary} onPress={() => setModalAdmin(false)}><Text style={s.btnSecondaryTxt}>Fechar</Text></TouchableOpacity>
         </View></ScrollView></View>
@@ -1297,14 +1347,19 @@ export default function App() {
         </View>
       </View>
 
-      {/* Abas (8 — sem conectar) */}
+      {/* Abas — minimalistas, só emoji pequeno */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ backgroundColor: tema.card, borderBottomWidth: 1, borderBottomColor: tema.border }}>
         <View style={{ flexDirection: 'row' }}>
           {ABAS.map((aba) => {
             const icones = { home:'🏠', calendario:'📅', ranking:'🏆', loja:'🛒', conquistas:'🏅', mural:'💌', sugestoes:'💡', perfil:'👤' };
+            const ativo = abaAtiva === aba;
             return (
-              <TouchableOpacity key={aba} style={[s.aba, abaAtiva === aba && { borderBottomWidth: 2, borderBottomColor: tema.primary }]} onPress={() => { abaAtivaRef.current = aba; setAbaAtiva(aba); }}>
-                <Text style={[s.abaTxt, abaAtiva === aba && { opacity: 1 }]}>{icones[aba]}</Text>
+              <TouchableOpacity
+                key={aba}
+                style={{ paddingHorizontal: 9, paddingVertical: 5, alignItems: 'center', borderBottomWidth: ativo ? 2 : 0, borderBottomColor: tema.primary }}
+                onPress={() => { abaAtivaRef.current = aba; setAbaAtiva(aba); }}
+              >
+                <Text style={{ fontSize: 13, opacity: ativo ? 1 : 0.4 }}>{icones[aba]}</Text>
               </TouchableOpacity>
             );
           })}
@@ -1315,6 +1370,11 @@ export default function App() {
 
         {/* HOME */}
         {abaAtiva === 'home' && <>
+          {/* 🆕 NOVO alpha 0.0.1: Countdown em segundos */}
+          <View style={[s.countdownBar, naJanela && { backgroundColor: '#00ff8722', borderColor: '#00ff87' }]}>
+            <Text style={[s.countdownTxt, naJanela && { color: '#00ff87', fontWeight: '900' }]}>{countdown}</Text>
+          </View>
+
           {pD > 0 ? (
             <View style={[s.card, { borderColor: '#ffd60a' }]}>
               <Text style={{ fontSize: 44 }}>⏸️</Text>
@@ -1323,15 +1383,21 @@ export default function App() {
             </View>
           ) : <>
             <ConsistencyCircle historico={historico} dataInicio={dataInicio} tema={tema} />
-            <View style={[s.card, { borderColor: tomouHoje ? '#00ff87' : tema.primary }]}>
-              <Text style={{ fontSize: 48 }}>{tomouHoje ? '✅' : '⏰'}</Text>
-              <Text style={s.cardTitulo}>{tomouHoje ? 'Tomou hoje!' : 'Ainda não tomou'}</Text>
+            <View style={[s.card, { borderColor: tomouHoje ? '#00ff87' : naJanela ? '#00ff87' : tema.primary }]}>
+              <Text style={{ fontSize: 48 }}>{tomouHoje ? '✅' : naJanela ? '🟢' : '⏰'}</Text>
+              <Text style={s.cardTitulo}>{tomouHoje ? 'Tomou hoje!' : naJanela ? 'HORA DA PÍLULA!' : 'Ainda não tomou'}</Text>
               <Text style={s.cardSub}>Dia {diaCartela}/28</Text>
               {meuHorario && !tomouHoje && <Text style={[s.cardSub, { marginTop: 6, color: tema.accent }]}>⏰ Seu lembrete: {meuHorario}</Text>}
             </View>
             {!tomouHoje && (
               <Animated.View style={{ transform: [{ scale: pulseBtn }] }}>
-                <TouchableOpacity style={s.btnPrimary} onPress={marcarTomou}><Text style={s.btnPrimaryTxt}>💊 Marcar agora</Text></TouchableOpacity>
+                {/* 🆕 NOVO alpha 0.0.1: Botão fica verde quando janela aberta */}
+                <TouchableOpacity
+                  style={[s.btnPrimary, naJanela && { backgroundColor: '#00cc66' }]}
+                  onPress={marcarTomou}
+                >
+                  <Text style={s.btnPrimaryTxt}>{naJanela ? '🟢 Marcar agora — Janela aberta!' : '💊 Marcar agora'}</Text>
+                </TouchableOpacity>
               </Animated.View>
             )}
           </>}
@@ -1591,6 +1657,7 @@ export default function App() {
           <TouchableOpacity style={[s.btnSecondary, { marginTop: 4 }]} onPress={fazerLogout}>
             <Text style={{ color: '#ff4444', fontWeight: '700' }}>🚪 Sair da conta</Text>
           </TouchableOpacity>
+          <Text style={{ color: '#333', fontSize: 11, textAlign: 'center', marginTop: 16 }}>v{VERSAO_ATUAL}</Text>
         </>}
 
       </ScrollView>
@@ -1684,4 +1751,7 @@ const makeStyles = (tema) => StyleSheet.create({
   mensagemUsuario:{ color: tema.primary, fontWeight: 'bold', fontSize: 12 },
   mensagemTexto:  { color: '#fff', fontSize: 14, marginTop: 4 },
   mensagemData:   { color: tema.sub, fontSize: 10, marginTop: 4, textAlign: 'right' },
+  // 🆕 NOVO alpha 0.0.1
+  countdownBar:   { backgroundColor: tema.card, borderRadius: 12, padding: 10, alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: tema.border },
+  countdownTxt:   { color: tema.sub, fontSize: 13, fontWeight: '700' },
 });
