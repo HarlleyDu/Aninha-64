@@ -39,7 +39,7 @@ try {
   console.error("Firebase Init Error:", e);
 }
 
-const VERSAO_ATUAL  = "alpha 0.0.1";
+const VERSAO_ATUAL  = "alpha 0.0.2";
 const ADMIN_EMAIL   = "Harlleyduarte@gmail.com";
 const JANELA_INICIO = { h: 20, m: 30 };
 const JANELA_FIM    = { h: 20, m: 40 };
@@ -256,17 +256,21 @@ Notifications.setNotificationHandler({
   handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false }),
 });
 
+// Círculo de consistência compacto — não ocupa a tela toda
 function ConsistencyCircle({ historico, dataInicio, tema }) {
-  const TOTAL = 28; const RADIUS = (SW - 200) / 2; const DOT = 10; // FIX: menor
-  const anim = useRef(new Animated.Value(0)).current;
-  useEffect(() => { Animated.timing(anim, { toValue: 1, duration: 900, useNativeDriver: true }).start(); }, []);
-  const scale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] });
-  const opacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
-  const hoje = todayKey();
+  const TOTAL = 28;
+  const SIZE  = 80; // diâmetro fixo pequeno
+  const R     = SIZE / 2;
+  const DOT   = 6;
+  const hoje  = todayKey();
+
   const getDayKey = (idx) => {
     if (!dataInicio) return null;
-    const d = new Date(dataInicio + 'T12:00:00'); d.setDate(d.getDate() + idx - 1); return dateToKey(d);
+    const d = new Date(dataInicio + 'T12:00:00');
+    d.setDate(d.getDate() + idx - 1);
+    return dateToKey(d);
   };
+
   const totalTomou = Object.values(historico).filter(e => e?.tomou).length;
   const diasPassados = (() => {
     if (!dataInicio) return 0;
@@ -274,32 +278,49 @@ function ConsistencyCircle({ historico, dataInicio, tema }) {
     return Math.min(Math.max(diff + 1, 0), TOTAL);
   })();
   const consistencia = diasPassados > 0 ? Math.round((totalTomou / diasPassados) * 100) : 0;
+
   const dots = Array.from({ length: TOTAL }, (_, i) => {
-    const idx = i + 1; const angle = ((idx - 1) / TOTAL) * 2 * Math.PI - Math.PI / 2;
-    const x = RADIUS + Math.cos(angle) * RADIUS - DOT / 2;
-    const y = RADIUS + Math.sin(angle) * RADIUS - DOT / 2;
-    const key = getDayKey(idx); const tomou = key ? !!historico[key]?.tomou : false;
-    const eHoje = key === hoje; const futuro = key ? key > hoje : true;
+    const angle = ((i) / TOTAL) * 2 * Math.PI - Math.PI / 2;
+    const x = R + Math.cos(angle) * (R - DOT) - DOT / 2;
+    const y = R + Math.sin(angle) * (R - DOT) - DOT / 2;
+    const key = getDayKey(i + 1);
+    const tomou = key ? !!historico[key]?.tomou : false;
+    const futuro = key ? key > hoje : true;
     let cor = tema.border;
-    if (tomou) cor = tema.primary; else if (!futuro && key) cor = '#ff4444';
-    return { x, y, tomou, eHoje, cor };
+    if (tomou) cor = tema.primary;
+    else if (!futuro && key) cor = '#ff4444';
+    return { x, y, cor };
   });
+
   return (
-    <Animated.View style={{ width: RADIUS*2, height: RADIUS*2, alignSelf:'center', transform:[{scale}], opacity, marginBottom:16 }}>
-      <View style={{ position:'absolute', width:RADIUS*2, height:RADIUS*2, borderRadius:RADIUS, borderWidth:2, borderColor:tema.border }} />
-      {dots.map((d, i) => (
-        <View key={i} style={{ position:'absolute', left:d.x, top:d.y, width:DOT, height:DOT, borderRadius:DOT/2,
-          backgroundColor:d.cor, borderWidth:d.eHoje?2:0, borderColor:'#ffd60a', elevation:d.tomou?4:0 }} />
-      ))}
-      <View style={{ position:'absolute', top:RADIUS-RADIUS*0.38, left:RADIUS-RADIUS*0.38,
-        width:RADIUS*0.76, height:RADIUS*0.76, borderRadius:RADIUS*0.38,
-        backgroundColor:tema.card, borderWidth:1, borderColor:tema.border,
-        alignItems:'center', justifyContent:'center' }}>
-        <Text style={{ color:tema.primary, fontSize:28, fontWeight:'900' }}>{consistencia}%</Text>
-        <Text style={{ color:tema.sub, fontSize:11, marginTop:2 }}>consistência</Text>
-        <Text style={{ color:tema.text, fontSize:13, fontWeight:'700', marginTop:4 }}>{totalTomou}/28</Text>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+      {/* Círculo pequeno */}
+      <View style={{ width: SIZE, height: SIZE, position: 'relative' }}>
+        <View style={{ position: 'absolute', width: SIZE, height: SIZE, borderRadius: R, borderWidth: 1, borderColor: tema.border }} />
+        {dots.map((d, i) => (
+          <View key={i} style={{
+            position: 'absolute', left: d.x, top: d.y,
+            width: DOT, height: DOT, borderRadius: DOT / 2,
+            backgroundColor: d.cor,
+          }} />
+        ))}
+        <View style={{
+          position: 'absolute',
+          top: SIZE * 0.25, left: SIZE * 0.25,
+          width: SIZE * 0.5, height: SIZE * 0.5,
+          borderRadius: SIZE * 0.25,
+          backgroundColor: tema.card,
+          alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Text style={{ color: tema.primary, fontSize: 11, fontWeight: '900' }}>{consistencia}%</Text>
+        </View>
       </View>
-    </Animated.View>
+      {/* Info ao lado */}
+      <View>
+        <Text style={{ color: tema.text, fontSize: 13, fontWeight: '700' }}>{totalTomou}/28 dias</Text>
+        <Text style={{ color: tema.sub, fontSize: 11, marginTop: 2 }}>consistência: {consistencia}%</Text>
+      </View>
+    </View>
   );
 }
 
