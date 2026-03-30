@@ -44,10 +44,11 @@ const { width: SW } = Dimensions.get('window');
 
 // ─── Themes ────────────────────────────────────────────────────────────────────
 const TEMAS = {
-  roxo:   { primary:'#ff2d78', bg:'#0a0010', card:'#130020', border:'#2a1040', accent:'#7b2fff', text:'#fff', sub:'#aa88cc' },
-  dourado:{ primary:'#ffd60a', bg:'#0a0800', card:'#1a1200', border:'#3a2a00', accent:'#ff9500', text:'#fff', sub:'#ccaa44' },
-  ciano:  { primary:'#00e5ff', bg:'#000a10', card:'#001520', border:'#003040', accent:'#0088cc', text:'#fff', sub:'#44aacc' },
-  verde:  { primary:'#00ff87', bg:'#000a05', card:'#001510', border:'#003020', accent:'#00cc66', text:'#fff', sub:'#44cc88' },
+  roxo:   { primary:'#ff2d78', bg:'#0a0010', card:'#130020', border:'#2a1040', accent:'#7b2fff', text:'#fff', sub:'#aa88cc', preco:0 },
+  dourado:{ primary:'#ffd60a', bg:'#0a0800', card:'#1a1200', border:'#3a2a00', accent:'#ff9500', text:'#fff', sub:'#ccaa44', preco:20 },
+  ciano:  { primary:'#00e5ff', bg:'#000a10', card:'#001520', border:'#003040', accent:'#0088cc', text:'#fff', sub:'#44aacc', preco:20 },
+  verde:  { primary:'#00ff87', bg:'#000a05', card:'#001510', border:'#003020', accent:'#00cc66', text:'#fff', sub:'#44cc88', preco:80 },
+  preto:  { primary:'#ffffff', bg:'#000000', card:'#111111', border:'#333333', accent:'#888888', text:'#fff', sub:'#aaaaaa', preco:200 },
 };
 
 // ─── Date Helpers ──────────────────────────────────────────────────────────────
@@ -89,8 +90,7 @@ Notifications.setNotificationHandler({
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// CONSISTENCY CIRCLE
-// Cartela de 28 dias em formato circular. Sem dependências externas.
+// CONSISTENCY CIRCLE (mesmo código original)
 // ══════════════════════════════════════════════════════════════════════════════
 function ConsistencyCircle({ historico, dataInicio, tema }) {
   const TOTAL  = 28;
@@ -212,9 +212,17 @@ export default function App() {
   const [adminUsers, setAdminUsers]   = useState([]);
   const [casalConfig, setCasalConfig] = useState({});
 
+  // ── NOVOS ESTADOS (Antrix, Streak, Conquistas, Loja) ───────────────────────
+  const [antrix, setAntrix]           = useState(0);
+  const [indPontos, setIndPontos]     = useState(0);
+  const [streak, setStreak]           = useState(0);
+  const [conquistas, setConquistas]   = useState([]);
+  const [modalLoja, setModalLoja]     = useState(false);
+  const [modalRanking, setModalRanking] = useState(false);
+  const [globalRanking, setGlobalRanking] = useState([]);
+  const [loadingRanking, setLoadingRanking] = useState(false);
+
   // ── OTA ─────────────────────────────────────────────────────────────────────
-  // versaoIgnoradaRef: substitui AsyncStorage. Reseta ao fechar o app.
-  // Se forcarAtualizar=true no Firebase, o botão "depois" desaparece.
   const [otaInfo, setOtaInfo]         = useState(null);
   const [modalOta, setModalOta]       = useState(false);
   const [otaProgress, setOtaProgress] = useState(0);
@@ -309,6 +317,7 @@ export default function App() {
   function resetEstado() {
     setHistorico({}); setPausa(null); setPontos({ ana: 0, harlley: 0 });
     setDataInicio(null); setFotos({}); setCasalId(null); setPerfil(null); setCasalConfig({});
+    setAntrix(0); setIndPontos(0); setStreak(0); setConquistas([]);
   }
 
   async function carregarPerfil(uid) {
@@ -317,6 +326,11 @@ export default function App() {
       if (!snap.exists()) { setTela('auth'); return; }
       const p = snap.val();
       setPerfil({ ...p, uid });
+      // Carrega os novos campos individuais
+      setAntrix(p.antrix || 0);
+      setIndPontos(p.indPontos || 0);
+      setStreak(p.streak || 0);
+      setConquistas(p.conquistas || []);
       if (!p.genero) setModalGenero(true); // onboarding
       if (p.casalId) {
         setCasalId(p.casalId);
@@ -388,8 +402,7 @@ export default function App() {
     catch(e) { Alert.alert('Erro', 'Não foi possível salvar o tema.'); }
   }
 
-  // Notificações: usa horário pessoal do usuário se definido,
-  // mais Janela de Ouro fixa e alerta de tensão 5min antes do fim.
+  // Notificações: mesmo código original
   async function configurarAlarmes(cid) {
     try {
       if (!Device.isDevice) return;
@@ -439,6 +452,7 @@ export default function App() {
       const cred = await createUserWithEmailAndPassword(auth, authEmail.trim(), authSenha);
       await updateProfile(cred.user, { displayName: authNome.trim() });
       const isHarlley = authEmail.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
+      // Inicializa os novos campos individuais
       await set(ref(db, `usuarios/${cred.user.uid}`), {
         nome: authNome.trim(),
         email: authEmail.trim().toLowerCase(),
@@ -446,6 +460,10 @@ export default function App() {
         casalId: null,
         genero: null,
         criadoEm: new Date().toISOString(),
+        antrix: 0,
+        indPontos: 0,
+        streak: 0,
+        conquistas: []
       });
     } catch(e) { setAuthErro('Erro no cadastro.'); }
     setAuthLoading(false);
@@ -516,22 +534,100 @@ export default function App() {
     } catch(e) { Alert.alert('Erro', 'Falha ao salvar horário.'); }
   }
 
-  // ── Pontuação por gênero ─────────────────────────────────────────────────────
-  // Estrutura no Firebase permanece { ana: N, harlley: N } — sem quebrar dados.
-  // Dentro da Janela de Ouro → sempre +1 ana (quem tomou a pílula).
-  // Fora da janela → +1 para quem marcou (ana ou harlley).
+  // ── NOVAS FUNÇÕES: Recompensa, Streak, Antrix, Conquistas ───────────────────
+  function calcularRecompensa(streakAtual) {
+    let pontosGanhos = 10;
+    let antrixGanho = 5;
+
+    if (streakAtual >= 2) pontosGanhos = 15;
+    if (streakAtual >= 3) pontosGanhos = 20;
+    if (streakAtual >= 4) pontosGanhos = 30;
+    if (streakAtual >= 5) pontosGanhos = 50;
+
+    if (streakAtual >= 2) antrixGanho = 7;
+    if (streakAtual >= 3) antrixGanho = 10;
+    if (streakAtual >= 4) antrixGanho = 15;
+    if (streakAtual >= 5) antrixGanho = 25;
+
+    return { pontosGanhos, antrixGanho };
+  }
+
+  // Calcula o streak atual baseado no histórico
+  function calcularStreakAtual() {
+    if (!dataInicio) return 0;
+    let streakAtual = 0;
+    let data = hoje;
+    while (true) {
+      if (historico[data]?.tomou) {
+        streakAtual++;
+        data = addDias(data, -1);
+      } else {
+        break;
+      }
+    }
+    return streakAtual;
+  }
+
+  async function verificarConquistas(streakAtual, indPontosAtual, antrixAtual) {
+    let novas = [...conquistas];
+    let mudou = false;
+
+    if (streakAtual >= 3 && !novas.includes('streak3')) {
+      novas.push('streak3');
+      Alert.alert('🏆 Conquista!', '3 dias seguidos!');
+      mudou = true;
+    }
+    if (streakAtual >= 7 && !novas.includes('streak7')) {
+      novas.push('streak7');
+      Alert.alert('🏆 Conquista!', '7 dias seguidos!');
+      mudou = true;
+    }
+    if (streakAtual >= 14 && !novas.includes('streak14')) {
+      novas.push('streak14');
+      Alert.alert('🏆 Conquista!', '14 dias seguidos!');
+      mudou = true;
+    }
+    if (indPontosAtual >= 100 && !novas.includes('100p')) {
+      novas.push('100p');
+      Alert.alert('🏆 Conquista!', '100 pontos individuais!');
+      mudou = true;
+    }
+    if (antrixAtual >= 200 && !novas.includes('200a')) {
+      novas.push('200a');
+      Alert.alert('🏆 Conquista!', '200 Antrix!');
+      mudou = true;
+    }
+    if (indPontosAtual >= 500 && !novas.includes('500p')) {
+      novas.push('500p');
+      Alert.alert('🏆 Conquista!', '500 pontos individuais!');
+      mudou = true;
+    }
+
+    if (mudou) {
+      setConquistas(novas);
+      await update(ref(db, `usuarios/${authUser.uid}`), { conquistas: novas });
+    }
+  }
+
+  // Função principal de marcar a pílula com recompensas individuais
   async function marcarTomou() {
     if (!casalId) return;
+    if (pausa?.ativa) {
+      Alert.alert('⏸️ Pausa ativa', 'Aguarde o fim da pausa.');
+      return;
+    }
+    if (historico[hoje]?.tomou) {
+      Alert.alert('Já tomou hoje', 'Você já registrou a pílula de hoje.');
+      return;
+    }
+
     try {
       const agora = new Date();
       const hora  = agora.toTimeString().slice(0, 5);
       const naJanela = estaDentroJanela('20:30', 10, agora);
       const quemSouEu = (perfil?.nome || '').toLowerCase().includes('harlley') ? 'harlley' : 'ana';
 
-      await set(ref(db, `casais/${casalId}/historico/${hoje}`), {
-        data: hoje, hora, tomou: true, quemMarcou: authUser.uid,
-      });
-
+      // --- Ponto para o casal ---
       const np = { ...pontos };
       if (naJanela) {
         np.ana = (np.ana || 0) + 1;
@@ -540,6 +636,32 @@ export default function App() {
       }
       await set(ref(db, `casais/${casalId}/pontos`), np);
 
+      // --- Histórico ---
+      await set(ref(db, `casais/${casalId}/historico/${hoje}`), {
+        data: hoje, hora, tomou: true, quemMarcou: authUser.uid,
+      });
+
+      // --- Recompensas individuais (streak, antrix, pontos) ---
+      const streakAtual = calcularStreakAtual();
+      const { pontosGanhos, antrixGanho } = calcularRecompensa(streakAtual);
+      const novoStreak = streakAtual + 1;
+      const novoIndPontos = indPontos + pontosGanhos;
+      const novoAntrix = antrix + antrixGanho;
+
+      // Atualiza no Firebase e local
+      await update(ref(db, `usuarios/${authUser.uid}`), {
+        indPontos: novoIndPontos,
+        antrix: novoAntrix,
+        streak: novoStreak
+      });
+      setIndPontos(novoIndPontos);
+      setAntrix(novoAntrix);
+      setStreak(novoStreak);
+
+      // Verifica conquistas
+      await verificarConquistas(novoStreak, novoIndPontos, novoAntrix);
+
+      // --- Efeitos visuais ---
       const total = Object.keys(historico).length + 1;
       if (total % 28 === 0) { setConfete(true); setTimeout(() => setConfete(false), 3000); }
 
@@ -549,7 +671,12 @@ export default function App() {
         Animated.delay(2000),
         Animated.timing(fadeAmor, { toValue: 0, duration: 500, useNativeDriver: true }),
       ]).start(() => setModalAmor(false));
-    } catch(e) { Alert.alert('Erro', 'Falha ao registrar.'); }
+
+      Alert.alert('✅ Tomou!', `+${pontosGanhos} pontos, +${antrixGanho} Antrix! Streak: ${novoStreak}`);
+    } catch(e) {
+      console.error(e);
+      Alert.alert('Erro', 'Falha ao registrar.');
+    }
   }
 
   async function adminToggleDia(key) {
@@ -598,6 +725,49 @@ export default function App() {
     } catch(e) {}
   }
 
+  // ── LOJA: comprar temas com Antrix ───────────────────────────────────────────
+  async function comprarTema(nome, preco) {
+    if (antrix < preco) {
+      Alert.alert('Antrix insuficiente', `Você tem ${antrix} Antrix. Preço: ${preco}`);
+      return;
+    }
+    const novoAntrix = antrix - preco;
+    setAntrix(novoAntrix);
+    await update(ref(db, `usuarios/${authUser.uid}`), { antrix: novoAntrix });
+    await salvarTema(nome);
+    Alert.alert('🎉 Tema comprado!', `Você comprou o tema ${nome} por ${preco} Antrix.`);
+    setModalLoja(false);
+  }
+
+  // ── RANKING GLOBAL ───────────────────────────────────────────────────────────
+  async function carregarRankingGlobal() {
+    setLoadingRanking(true);
+    try {
+      const snapshot = await get(ref(db, 'usuarios'));
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        let lista = [];
+        for (let id in data) {
+          lista.push({
+            nome: data[id].nome,
+            email: data[id].email,
+            pontos: data[id].indPontos || 0,
+            antrix: data[id].antrix || 0,
+            streak: data[id].streak || 0,
+          });
+        }
+        lista.sort((a, b) => b.pontos - a.pontos);
+        setGlobalRanking(lista);
+      } else {
+        setGlobalRanking([]);
+      }
+    } catch (e) {
+      Alert.alert('Erro', 'Não foi possível carregar o ranking.');
+    }
+    setLoadingRanking(false);
+    setModalRanking(true);
+  }
+
   // ── OTA ─────────────────────────────────────────────────────────────────────
   async function baixarOta() {
     if (!otaInfo?.apkUrl) return;
@@ -627,7 +797,7 @@ export default function App() {
   }
 
   function ignorarOta() {
-    versaoIgnoradaRef.current = otaInfo?.versao; // memória, sem AsyncStorage
+    versaoIgnoradaRef.current = otaInfo?.versao;
     setModalOta(false);
   }
 
@@ -640,6 +810,16 @@ export default function App() {
   const nomeAtual  = perfil?.nome || 'Usuário';
   const meuHorario = casalConfig?.horarioPessoal?.[authUser?.uid];
   const baixando   = otaProgress > 0 && otaProgress < 1;
+
+  // Mapeia conquistas para nomes legíveis
+  const conquistasNomes = {
+    streak3: '🔥 3 dias seguidos',
+    streak7: '💎 7 dias seguidos',
+    streak14: '🌟 14 dias seguidos',
+    '100p': '✨ 100 pontos individuais',
+    '500p': '🏅 500 pontos individuais',
+    '200a': '💰 200 Antrix',
+  };
 
   // ══════════════════════════════════════════════════════════════════════════
   // RENDER
@@ -772,7 +952,7 @@ export default function App() {
         </View></View>
       </Modal>
 
-      {/* Modal Tema */}
+      {/* Modal Tema (configuração de tema, mantido) */}
       <Modal transparent visible={modalTema} animationType="slide">
         <View style={s.modalWrap}><View style={s.modalCard}>
           <Text style={s.modalTitulo}>🎨 Tema</Text>
@@ -883,6 +1063,47 @@ export default function App() {
         </View></View>
       </Modal>
 
+      {/* NOVO MODAL: Loja */}
+      <Modal transparent visible={modalLoja} animationType="slide">
+        <View style={s.modalWrap}><View style={s.modalCard}>
+          <Text style={s.modalTitulo}>🛒 Loja</Text>
+          <Text style={[s.authSub, { textAlign: 'left', marginBottom: 10 }]}>Seus Antrix: {antrix}</Text>
+          <ScrollView style={{ maxHeight: 400 }}>
+            {Object.entries(TEMAS).map(([nome, t]) => (
+              <TouchableOpacity key={nome}
+                style={[s.temaBtn, temaNome === nome && { borderColor: t.primary }]}
+                onPress={() => comprarTema(nome, t.preco)}>
+                <View style={[s.temaCor, { backgroundColor: t.primary }]} />
+                <Text style={s.temaTxt}>{nome} - {t.preco} Antrix</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          <TouchableOpacity style={s.btnSecondary} onPress={() => setModalLoja(false)}>
+            <Text style={s.btnSecondaryTxt}>Fechar</Text>
+          </TouchableOpacity>
+        </View></View>
+      </Modal>
+
+      {/* NOVO MODAL: Ranking Global */}
+      <Modal transparent visible={modalRanking} animationType="slide">
+        <View style={s.modalWrap}><View style={s.modalCard}>
+          <Text style={s.modalTitulo}>🏆 Ranking Global</Text>
+          {loadingRanking && <ActivityIndicator style={{ marginVertical: 20 }} />}
+          <ScrollView style={{ maxHeight: 400 }}>
+            {globalRanking.map((item, idx) => (
+              <View key={idx} style={s.rankGlobalItem}>
+                <Text style={s.rankPos}>{idx+1}º</Text>
+                <Text style={s.rankName}>{item.nome || item.email.split('@')[0]}</Text>
+                <Text style={s.rankValue}>{item.pontos} pts</Text>
+              </View>
+            ))}
+          </ScrollView>
+          <TouchableOpacity style={s.btnSecondary} onPress={() => setModalRanking(false)}>
+            <Text style={s.btnSecondaryTxt}>Fechar</Text>
+          </TouchableOpacity>
+        </View></View>
+      </Modal>
+
       {/* Header */}
       <View style={s.header}>
         <TouchableOpacity style={s.headerLeft} onPress={() => setAbaAtiva('perfil')}>
@@ -986,9 +1207,9 @@ export default function App() {
           </View>
         </>}
 
-        {/* RANKING */}
+        {/* RANKING (dupla) - mantido */}
         {abaAtiva === 'ranking' && <>
-          <Text style={s.secLabel}>🏆 Ranking</Text>
+          <Text style={s.secLabel}>🏆 Ranking da dupla</Text>
           <View style={[s.rankCard, { borderLeftWidth: 4, borderLeftColor: tema.primary }]}>
             <View>
               <Text style={s.rankNome}>Ana 👩</Text>
@@ -1025,7 +1246,7 @@ export default function App() {
           </TouchableOpacity>
         </>}
 
-        {/* PERFIL */}
+        {/* PERFIL (com informações individuais e botões para Loja e Ranking) */}
         {abaAtiva === 'perfil' && <>
           <View style={s.perfilCard}>
             <TouchableOpacity onPress={escolherFoto}>
@@ -1040,6 +1261,30 @@ export default function App() {
                 {perfil.genero === 'mulher' ? '👩 Mulher' : perfil.genero === 'homem' ? '👨 Homem' : '⚪ Não informado'}
               </Text>
             )}
+            {/* Novas estatísticas */}
+            <View style={s.statsRow}>
+              <View style={s.statItem}>
+                <Text style={s.statValue}>{indPontos}</Text>
+                <Text style={s.statLabel}>Pontos</Text>
+              </View>
+              <View style={s.statItem}>
+                <Text style={s.statValue}>{antrix}</Text>
+                <Text style={s.statLabel}>Antrix</Text>
+              </View>
+              <View style={s.statItem}>
+                <Text style={s.statValue}>{streak}</Text>
+                <Text style={s.statLabel}>Streak</Text>
+              </View>
+            </View>
+            {/* Conquistas */}
+            {conquistas.length > 0 && (
+              <View style={s.conquistasBox}>
+                <Text style={s.conquistasTitulo}>🏅 Conquistas</Text>
+                {conquistas.map((c, i) => (
+                  <Text key={i} style={s.conquistaItem}>{conquistasNomes[c] || c}</Text>
+                ))}
+              </View>
+            )}
             <Text style={s.perfilVersao}>v{VERSAO_ATUAL}</Text>
             <TouchableOpacity style={[s.adminBtn, { width: '100%', marginTop: 12 }]} onPress={() => {
               setHorarioInput(meuHorario || '20:30');
@@ -1053,6 +1298,15 @@ export default function App() {
               onPress={() => setModalGenero(true)}>
               <Text style={s.adminBtnTxt}>👤 Alterar gênero</Text>
             </TouchableOpacity>
+            {/* Botões novos */}
+            <TouchableOpacity style={[s.adminBtn, { width: '100%', marginTop: 8, borderColor: '#ffaa00' }]}
+              onPress={() => setModalLoja(true)}>
+              <Text style={[s.adminBtnTxt, { color: '#ffaa00' }]}>🛒 Loja (comprar temas com Antrix)</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.adminBtn, { width: '100%', marginTop: 8, borderColor: '#44ff44' }]}
+              onPress={carregarRankingGlobal}>
+              <Text style={[s.adminBtnTxt, { color: '#44ff44' }]}>🏆 Ver Ranking Global</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={[s.btnSecondary, { marginTop: 8 }]} onPress={fazerLogout}>
               <Text style={{ color: '#ff4444', fontWeight: '700' }}>Sair da conta</Text>
             </TouchableOpacity>
@@ -1065,7 +1319,7 @@ export default function App() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// STYLES
+// STYLES (adicionados novos estilos)
 // ══════════════════════════════════════════════════════════════════════════════
 const makeStyles = (tema) => StyleSheet.create({
   root:           { flex: 1, backgroundColor: tema.bg },
@@ -1131,4 +1385,17 @@ const makeStyles = (tema) => StyleSheet.create({
   progressWrap:   { width: '100%', height: 8, backgroundColor: tema.border, borderRadius: 4, marginBottom: 16, overflow: 'hidden' },
   progressBar:    { height: '100%', backgroundColor: tema.primary, borderRadius: 4 },
   progressTxt:    { color: tema.sub, fontSize: 12, textAlign: 'center', marginTop: 4 },
+
+  // NOVOS ESTILOS
+  statsRow:       { flexDirection: 'row', justifyContent: 'space-around', width: '100%', marginVertical: 15 },
+  statItem:       { alignItems: 'center' },
+  statValue:      { fontSize: 24, fontWeight: 'bold', color: tema.primary },
+  statLabel:      { fontSize: 12, color: tema.sub, marginTop: 4 },
+  conquistasBox:  { width: '100%', backgroundColor: tema.bg, borderRadius: 12, padding: 12, marginVertical: 10, borderWidth: 1, borderColor: tema.border },
+  conquistasTitulo:{ color: '#fff', fontWeight: 'bold', marginBottom: 8, fontSize: 14 },
+  conquistaItem:  { color: tema.sub, fontSize: 12, marginBottom: 4 },
+  rankGlobalItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: tema.border },
+  rankPos:        { width: 40, fontSize: 16, fontWeight: 'bold', color: tema.primary },
+  rankName:       { flex: 1, fontSize: 14, color: '#fff' },
+  rankValue:      { fontSize: 14, fontWeight: 'bold', color: tema.primary },
 });
