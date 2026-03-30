@@ -7,6 +7,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import * as FileSystem from 'expo-file-system';
 import * as IntentLauncher from 'expo-intent-launcher';
+import * as ImagePicker from 'expo-image-picker';
 import { initializeApp } from 'firebase/app';
 import {
   getDatabase, ref, set, get, onValue, push, remove, off, update
@@ -36,22 +37,199 @@ try {
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
-const VERSAO_ATUAL  = "5.1.0";
+const VERSAO_ATUAL  = "6.0.0";
 const ADMIN_EMAIL   = "Harlleyduarte@gmail.com";
 const JANELA_INICIO = { h: 20, m: 30 };
 const JANELA_FIM    = { h: 20, m: 40 };
 const { width: SW } = Dimensions.get('window');
 
-// ─── Themes ────────────────────────────────────────────────────────────────────
-const TEMAS = {
-  roxo:   { primary:'#ff2d78', bg:'#0a0010', card:'#130020', border:'#2a1040', accent:'#7b2fff', text:'#fff', sub:'#aa88cc', preco:0 },
-  dourado:{ primary:'#ffd60a', bg:'#0a0800', card:'#1a1200', border:'#3a2a00', accent:'#ff9500', text:'#fff', sub:'#ccaa44', preco:20 },
-  ciano:  { primary:'#00e5ff', bg:'#000a10', card:'#001520', border:'#003040', accent:'#0088cc', text:'#fff', sub:'#44aacc', preco:20 },
-  verde:  { primary:'#00ff87', bg:'#000a05', card:'#001510', border:'#003020', accent:'#00cc66', text:'#fff', sub:'#44cc88', preco:80 },
-  preto:  { primary:'#ffffff', bg:'#000000', card:'#111111', border:'#333333', accent:'#888888', text:'#fff', sub:'#aaaaaa', preco:200 },
+// ─── Themes (base) ────────────────────────────────────────────────────────────
+const TEMAS_BASE = {
+  roxo:   { primary:'#ff2d78', bg:'#0a0010', card:'#130020', border:'#2a1040', accent:'#7b2fff', text:'#fff', sub:'#aa88cc' },
+  dourado:{ primary:'#ffd60a', bg:'#0a0800', card:'#1a1200', border:'#3a2a00', accent:'#ff9500', text:'#fff', sub:'#ccaa44' },
+  ciano:  { primary:'#00e5ff', bg:'#000a10', card:'#001520', border:'#003040', accent:'#0088cc', text:'#fff', sub:'#44aacc' },
+  verde:  { primary:'#00ff87', bg:'#000a05', card:'#001510', border:'#003020', accent:'#00cc66', text:'#fff', sub:'#44cc88' },
+  // Temas da loja serão adicionados dinamicamente via estado, mas por enquanto mantemos os base
 };
 
-// ─── Date Helpers ──────────────────────────────────────────────────────────────
+// ─── LOJA: Itens completos (temas e selos) ─────────────────────────────────────
+const ITENS_LOJA = {
+  temas: {
+    comum: [
+      { id: 'rosa', nome: 'Rosa', preco: 20, cor: '#ff69b4' },
+      { id: 'azul', nome: 'Azul', preco: 20, cor: '#3498db' },
+      { id: 'roxo', nome: 'Roxo', preco: 20, cor: '#9b59b6' },
+      { id: 'branco', nome: 'Branco', preco: 20, cor: '#ffffff' },
+      { id: 'preto', nome: 'Preto', preco: 20, cor: '#000000' },
+      { id: 'verde', nome: 'Verde', preco: 20, cor: '#2ecc71' },
+      { id: 'vermelho', nome: 'Vermelho', preco: 20, cor: '#e74c3c' },
+      { id: 'laranja', nome: 'Laranja', preco: 20, cor: '#f39c12' },
+      { id: 'amarelo', nome: 'Amarelo', preco: 20, cor: '#f1c40f' },
+      { id: 'cinza', nome: 'Cinza', preco: 20, cor: '#95a5a6' }
+    ],
+    raro: [
+      { id: 'preto_rosa', nome: 'Preto + Rosa Neon', preco: 80, cor: '#000000', destaque: '#ff2d78' },
+      { id: 'preto_roxo', nome: 'Preto + Roxo', preco: 80, cor: '#000000', destaque: '#9b59b6' },
+      { id: 'preto_azul', nome: 'Preto + Azul Neon', preco: 80, cor: '#000000', destaque: '#3498db' },
+      { id: 'vermelho_preto', nome: 'Vermelho + Preto', preco: 80, cor: '#e74c3c', destaque: '#000000' },
+      { id: 'branco_rosa', nome: 'Branco + Rosa', preco: 80, cor: '#ffffff', destaque: '#ff69b4' },
+      { id: 'roxo_azul', nome: 'Roxo + Azul', preco: 80, cor: '#9b59b6', destaque: '#3498db' },
+      { id: 'verde_preto', nome: 'Verde Neon + Preto', preco: 80, cor: '#2ecc71', destaque: '#000000' },
+      { id: 'azul_branco', nome: 'Azul Escuro + Branco', preco: 80, cor: '#2c3e50', destaque: '#ffffff' },
+      { id: 'rosa_preto', nome: 'Rosa + Preto', preco: 80, cor: '#ff69b4', destaque: '#000000' },
+      { id: 'roxo_escuro_rosa', nome: 'Roxo Escuro + Rosa', preco: 80, cor: '#8e44ad', destaque: '#ff69b4' }
+    ],
+    bonito: [
+      { id: 'ceu_soft', nome: 'Céu Soft', preco: 200, cor: '#a0d2eb' },
+      { id: 'aesthetic_soft', nome: 'Aesthetic Soft', preco: 200, cor: '#f5c6e0' },
+      { id: 'love_pastel', nome: 'Love Pastel', preco: 200, cor: '#ffb7c5' },
+      { id: 'minimalista_branco', nome: 'Minimalista Branco', preco: 200, cor: '#f8f9fa' },
+      { id: 'dark_clean', nome: 'Dark Clean', preco: 200, cor: '#1e1e2f' },
+      { id: 'anime_soft', nome: 'Anime Soft', preco: 200, cor: '#ffd1dc' },
+      { id: 'pink_aesthetic', nome: 'Pink Aesthetic', preco: 200, cor: '#ff99cc' },
+      { id: 'galaxy', nome: 'Galaxy', preco: 200, cor: '#4b0082' },
+      { id: 'sunset', nome: 'Sunset', preco: 200, cor: '#ff7e5e' },
+      { id: 'dream_love', nome: 'Dream Love', preco: 200, cor: '#cdb4db' }
+    ],
+    lendario: [
+      { id: 'ana_harlley', nome: 'Ana & Harlley', preco: 500, cor: '#ff2d78' },
+      { id: 'coracao_negro', nome: 'Coraçãozinho Negro', preco: 500, cor: '#000000', destaque: '#ff2d78' },
+      { id: 'amor_desenho', nome: 'Amor de Desenho', preco: 500, cor: '#ffaa66' },
+      { id: 'amor_dois', nome: 'Amor a Dois', preco: 500, cor: '#ff66cc' },
+      { id: 'amor_anime', nome: 'Amor Anime', preco: 500, cor: '#ff99cc' },
+      { id: 'amor_negro', nome: 'Amor Negro', preco: 500, cor: '#333333', destaque: '#ff2d78' },
+      { id: 'coracao_rosa_neon', nome: 'Coração Rosa Neon', preco: 500, cor: '#ff2d78' },
+      { id: 'amor_para_sempre', nome: 'Amor Para Sempre', preco: 500, cor: '#ff66cc' },
+      { id: 'casal_apaixonado', nome: 'Casal Apaixonado', preco: 500, cor: '#ff99cc' },
+      { id: 'minha_garotinha', nome: 'Minha Garotinha', preco: 500, cor: '#ff66cc' }
+    ]
+  },
+  selos: {
+    comum: [
+      { id: 'coracao_rosa', nome: '💗 coração rosa', preco: 15, emoji: '💗' },
+      { id: 'estrela', nome: '⭐ estrela', preco: 15, emoji: '⭐' },
+      { id: 'brilho', nome: '💫 brilho', preco: 15, emoji: '💫' },
+      { id: 'lua', nome: '🌙 lua', preco: 15, emoji: '🌙' },
+      { id: 'flor', nome: '🌸 flor', preco: 15, emoji: '🌸' },
+      { id: 'coelhinho', nome: '🐰 coelhinho', preco: 15, emoji: '🐰' },
+      { id: 'borboleta', nome: '🦋 borboleta', preco: 15, emoji: '🦋' },
+      { id: 'laco_rosa', nome: '🎀 laço rosa', preco: 15, emoji: '🎀' },
+      { id: 'arco_iris', nome: '🌈 arco-íris', preco: 15, emoji: '🌈' },
+      { id: 'ursinho', nome: '🐻 ursinho', preco: 15, emoji: '🐻' }
+    ],
+    raro: [
+      { id: 'coroa', nome: '👑 coroa', preco: 60, emoji: '👑' },
+      { id: 'coracao_roxo', nome: '💜 coração roxo neon', preco: 60, emoji: '💜' },
+      { id: 'fogo_rosa', nome: '🔥 fogo rosa', preco: 60, emoji: '🔥' },
+      { id: 'coracao_negro', nome: '🖤 coração negro', preco: 60, emoji: '🖤' },
+      { id: 'brilho_forte', nome: '✨ brilho forte', preco: 60, emoji: '✨' },
+      { id: 'diamante', nome: '💎 diamante', preco: 60, emoji: '💎' },
+      { id: 'unicornio', nome: '🦄 unicórnio', preco: 60, emoji: '🦄' },
+      { id: 'raio_rosa', nome: '⚡ raio rosa', preco: 60, emoji: '⚡' },
+      { id: 'aura_galaxia', nome: '🌌 aura galáxia', preco: 60, emoji: '🌌' },
+      { id: 'simbolo_fofo', nome: '🕊️ símbolo fofo', preco: 60, emoji: '🕊️' }
+    ],
+    lendario: [
+      { id: 'coracao_desenho', nome: 'Coração desenhado à mão', preco: 300, emoji: '❤️' },
+      { id: 'estrela_desenho', nome: 'Estrela desenhada à mão', preco: 300, emoji: '⭐' },
+      { id: 'casal_desenho', nome: 'Emoji casal desenhado', preco: 300, emoji: '💑' },
+      { id: 'simbolo_secreto', nome: 'Símbolo secreto do app', preco: 300, emoji: '🔮' },
+      { id: 'emoji_exclusivo', nome: 'Emoji fofo exclusivo', preco: 300, emoji: '💖' },
+      { id: 'assinatura_desenho', nome: 'Assinatura desenhada', preco: 300, emoji: '✍️' },
+      { id: 'marca_criador', nome: 'Marca exclusiva do criador', preco: 300, emoji: '🎨' },
+      { id: 'animado_futuro', nome: 'Emoji especial animado', preco: 300, emoji: '✨' },
+      { id: 'assinatura_ana', nome: 'Emoji assinatura Ana', preco: 300, emoji: '👩‍❤️‍👨' },
+      { id: 'assinatura_harlley', nome: 'Emoji assinatura Harlley', preco: 300, emoji: '💘' }
+    ]
+  }
+};
+
+// ─── CONQUISTAS ────────────────────────────────────────────────────────────────
+const CONQUISTAS = {
+  streak: [
+    { id: 'streak3', nome: '3 dias seguidos', cond: (s) => s.streak >= 3, recompensa: { antrix: 20 } },
+    { id: 'streak5', nome: '5 dias seguidos', cond: (s) => s.streak >= 5, recompensa: { antrix: 20 } },
+    { id: 'streak7', nome: '7 dias seguidos', cond: (s) => s.streak >= 7, recompensa: { antrix: 50 } },
+    { id: 'streak10', nome: '10 dias seguidos', cond: (s) => s.streak >= 10, recompensa: { antrix: 50 } },
+    { id: 'streak15', nome: '15 dias seguidos', cond: (s) => s.streak >= 15, recompensa: { antrix: 100 } },
+    { id: 'streak20', nome: '20 dias seguidos', cond: (s) => s.streak >= 20, recompensa: { antrix: 100 } },
+    { id: 'streak30', nome: '30 dias seguidos', cond: (s) => s.streak >= 30, recompensa: { antrix: 200 } },
+    { id: 'streak45', nome: '45 dias seguidos', cond: (s) => s.streak >= 45, recompensa: { antrix: 200 } },
+    { id: 'streak60', nome: '60 dias seguidos', cond: (s) => s.streak >= 60, recompensa: { antrix: 300 } },
+    { id: 'streak90', nome: '90 dias seguidos', cond: (s) => s.streak >= 90, recompensa: { antrix: 400 } },
+    { id: 'streak120', nome: '120 dias seguidos', cond: (s) => s.streak >= 120, recompensa: { antrix: 500 } },
+    { id: 'streak180', nome: '180 dias seguidos', cond: (s) => s.streak >= 180, recompensa: { antrix: 700 } },
+    { id: 'streak365', nome: '365 dias seguidos', cond: (s) => s.streak >= 365, recompensa: { antrix: 1000 } }
+  ],
+  ranking: [
+    { id: 'rank1_1', nome: 'Ficar em 1º lugar 1 vez', cond: (s) => s.rankPrimeiro >= 1, recompensa: { antrix: 40 } },
+    { id: 'rank1_3', nome: 'Ficar em 1º lugar 3 vezes', cond: (s) => s.rankPrimeiro >= 3, recompensa: { antrix: 40 } },
+    { id: 'rank1_5', nome: 'Ficar em 1º lugar 5 vezes', cond: (s) => s.rankPrimeiro >= 5, recompensa: { antrix: 60 } },
+    { id: 'rank1_10', nome: 'Ficar em 1º lugar 10 vezes', cond: (s) => s.rankPrimeiro >= 10, recompensa: { antrix: 100 } },
+    { id: 'rank1_20', nome: 'Ficar em 1º lugar 20 vezes', cond: (s) => s.rankPrimeiro >= 20, recompensa: { antrix: 150 } },
+    { id: 'rank1_30', nome: 'Ficar em 1º lugar 30 vezes', cond: (s) => s.rankPrimeiro >= 30, recompensa: { antrix: 200 } },
+    { id: 'rank1_50', nome: 'Ficar em 1º lugar 50 vezes', cond: (s) => s.rankPrimeiro >= 50, recompensa: { antrix: 300 } }
+  ],
+  antrix: [
+    { id: 'antrix100', nome: 'Juntar 100 Antrix', cond: (s) => s.antrixTotal >= 100, recompensa: { antrix: 0 } },
+    { id: 'antrix250', nome: 'Juntar 250 Antrix', cond: (s) => s.antrixTotal >= 250, recompensa: { antrix: 0 } },
+    { id: 'antrix500', nome: 'Juntar 500 Antrix', cond: (s) => s.antrixTotal >= 500, recompensa: { antrix: 0 } },
+    { id: 'antrix750', nome: 'Juntar 750 Antrix', cond: (s) => s.antrixTotal >= 750, recompensa: { antrix: 0 } },
+    { id: 'antrix1000', nome: 'Juntar 1000 Antrix', cond: (s) => s.antrixTotal >= 1000, recompensa: { antrix: 0 } },
+    { id: 'antrix1500', nome: 'Juntar 1500 Antrix', cond: (s) => s.antrixTotal >= 1500, recompensa: { antrix: 0 } },
+    { id: 'antrix2000', nome: 'Juntar 2000 Antrix', cond: (s) => s.antrixTotal >= 2000, recompensa: { antrix: 0 } }
+  ],
+  compras: [
+    { id: 'comprar1tema', nome: 'Comprar 1 tema', cond: (s) => s.totalTemasComprados >= 1, recompensa: { antrix: 30 } },
+    { id: 'comprar3temas', nome: 'Comprar 3 temas', cond: (s) => s.totalTemasComprados >= 3, recompensa: { antrix: 30 } },
+    { id: 'comprar5temas', nome: 'Comprar 5 temas', cond: (s) => s.totalTemasComprados >= 5, recompensa: { antrix: 50 } },
+    { id: 'comprar10temas', nome: 'Comprar 10 temas', cond: (s) => s.totalTemasComprados >= 10, recompensa: { antrix: 80 } },
+    { id: 'comprar1temararo', nome: 'Comprar 1 tema raro', cond: (s) => s.totalTemasRarosComprados >= 1, recompensa: { antrix: 50 } },
+    { id: 'comprar3temasraros', nome: 'Comprar 3 temas raros', cond: (s) => s.totalTemasRarosComprados >= 3, recompensa: { antrix: 100 } },
+    { id: 'comprar1temalendario', nome: 'Comprar 1 tema lendário', cond: (s) => s.totalTemasLendariosComprados >= 1, recompensa: { antrix: 150 } },
+    { id: 'comprar3temaslendarios', nome: 'Comprar 3 temas lendários', cond: (s) => s.totalTemasLendariosComprados >= 3, recompensa: { antrix: 300 } }
+  ],
+  app: [
+    { id: 'criar_conta', nome: 'Criar conta', cond: () => true, recompensa: { antrix: 10 } },
+    { id: 'login3dias', nome: 'Fazer login 3 dias seguidos', cond: (s) => s.loginStreak >= 3, recompensa: { antrix: 20 } },
+    { id: 'login7dias', nome: 'Fazer login 7 dias seguidos', cond: (s) => s.loginStreak >= 7, recompensa: { antrix: 40 } },
+    { id: 'login15dias', nome: 'Fazer login 15 dias seguidos', cond: (s) => s.loginStreak >= 15, recompensa: { antrix: 80 } },
+    { id: 'perfeito5', nome: 'Tomar no horário perfeito 5 vezes', cond: (s) => s.tomadasHorarioPerfeito >= 5, recompensa: { antrix: 50 } },
+    { id: 'perfeito10', nome: 'Tomar no horário perfeito 10 vezes', cond: (s) => s.tomadasHorarioPerfeito >= 10, recompensa: { antrix: 100 } },
+    { id: 'perfeito30', nome: 'Tomar no horário perfeito 30 vezes', cond: (s) => s.tomadasHorarioPerfeito >= 30, recompensa: { antrix: 200 } },
+    { id: 'perfeito100', nome: 'Tomar no horário perfeito 100 vezes', cond: (s) => s.tomadasHorarioPerfeito >= 100, recompensa: { antrix: 500 } },
+    { id: 'usar3temas', nome: 'Usar 3 temas diferentes', cond: (s) => s.temasDiferentesUsados >= 3, recompensa: { antrix: 30 } },
+    { id: 'usar5temas', nome: 'Usar 5 temas diferentes', cond: (s) => s.temasDiferentesUsados >= 5, recompensa: { antrix: 50 } }
+  ],
+  secretas: [
+    { id: '10_ranking_seguido', nomeSecreto: '???', nomeRevelado: 'Ganhar 10 vezes seguidas no ranking', cond: (s) => s.rankPrimeiroConsecutivo >= 10, recompensa: { tema: 'tema_favorita' } },
+    { id: '30dias_sem_erro', nomeSecreto: '???', nomeRevelado: 'Ficar 30 dias seguidos sem errar horário', cond: (s) => s.diasSemErroHorario >= 30, recompensa: { tema: 'tema_anjo_rosa' } },
+    { id: '2000_antrix_sem_gastar', nomeSecreto: '???', nomeRevelado: 'Juntar 2000 Antrix sem gastar', cond: (s) => s.antrixSemGastar >= 2000, recompensa: { tema: 'tema_rainha_jogo' } },
+    { id: '10_temas_lendarios', nomeSecreto: '???', nomeRevelado: 'Comprar 10 temas lendários', cond: (s) => s.totalTemasLendariosComprados >= 10, recompensa: { tema: 'tema_criadora_amor' } },
+    { id: '365_dias_streak', nomeSecreto: '???', nomeRevelado: 'Chegar em 365 dias seguidos', cond: (s) => s.streak >= 365, recompensa: { tema: 'tema_lenda_absoluta' } }
+  ]
+};
+
+// Mapeamento de temas especiais recompensas
+const RECOMPENSAS_TEMAS = {
+  tema_favorita: { id: 'tema_favorita', nome: 'Tema A Favorita', cor: '#ff66cc' },
+  tema_anjo_rosa: { id: 'tema_anjo_rosa', nome: 'Tema Anjo Rosa', cor: '#ffb7c5' },
+  tema_rainha_jogo: { id: 'tema_rainha_jogo', nome: 'Tema Rainha do Jogo', cor: '#ffd966' },
+  tema_criadora_amor: { id: 'tema_criadora_amor', nome: 'Tema Criadora do Amor', cor: '#ff99ff' },
+  tema_lenda_absoluta: { id: 'tema_lenda_absoluta', nome: 'Tema Lenda Absoluta', cor: '#ffaa44' }
+};
+
+// ─── Helper para temas dinâmicos ──────────────────────────────────────────────
+const getTemaById = (id) => {
+  // Busca em todas as categorias
+  for (let cat of Object.values(ITENS_LOJA.temas)) {
+    const found = cat.find(t => t.id === id);
+    if (found) return found;
+  }
+  return null;
+};
+
+// ─── Date Helpers ─────────────────────────────────────────────────────────────
 const dateToKey = d => d.toISOString().slice(0, 10);
 const todayKey  = () => dateToKey(new Date());
 const addDias   = (key, n) => {
@@ -65,7 +243,7 @@ const diasNoMes = (mes, ano) => new Date(ano, mes + 1, 0).getDate();
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
                'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
-// ─── Game Logic Helpers ────────────────────────────────────────────────────────
+// ─── Game Logic Helpers ───────────────────────────────────────────────────────
 const estaDentroJanela = (horario, tolerMin = 10, agora = new Date()) => {
   if (!horario) return false;
   const [h, m] = horario.split(':').map(Number);
@@ -84,7 +262,7 @@ const versaoMaior = (nova, atual) => {
   return ptN > ptA;
 };
 
-// ─── Notification Handler ──────────────────────────────────────────────────────
+// ─── Notification Handler ─────────────────────────────────────────────────────
 Notifications.setNotificationHandler({
   handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false }),
 });
@@ -205,22 +383,41 @@ export default function App() {
   const [pontos, setPontos]           = useState({ ana: 0, harlley: 0 });
   const [dataInicio, setDataInicio]   = useState(null);
   const [fotos, setFotos]             = useState({});
-  const [tema, setTemaState]          = useState(TEMAS.roxo);
-  const [temaNome, setTemaNome]       = useState('roxo');
+  const [temaAtualId, setTemaAtualId] = useState('roxo'); // id do tema atual
+  const [tema, setTemaState]          = useState(TEMAS_BASE.roxo);
   const [sugestao, setSugestao]       = useState('');
   const [abaAtiva, setAbaAtiva]       = useState('home');
   const [adminUsers, setAdminUsers]   = useState([]);
   const [casalConfig, setCasalConfig] = useState({});
 
-  // ── NOVOS ESTADOS (Antrix, Streak, Conquistas, Loja) ───────────────────────
+  // ── Novos estados (Loja, Conquistas) ────────────────────────────────────────
   const [antrix, setAntrix]           = useState(0);
   const [indPontos, setIndPontos]     = useState(0);
   const [streak, setStreak]           = useState(0);
-  const [conquistas, setConquistas]   = useState([]);
+  const [itensComprados, setItensComprados] = useState({ temas: [], selos: [] });
+  const [seloEquipado, setSeloEquipado] = useState(null);
+  const [conquistasDesbloqueadas, setConquistasDesbloqueadas] = useState({}); // id -> {desbloqueada, data}
+  const [estatisticas, setEstatisticas] = useState({
+    rankPrimeiro: 0,
+    rankPrimeiroConsecutivo: 0,
+    antrixTotal: 0,
+    totalTemasComprados: 0,
+    totalTemasRarosComprados: 0,
+    totalTemasLendariosComprados: 0,
+    totalSelosComprados: 0,
+    tomadasHorarioPerfeito: 0,
+    temasDiferentesUsados: new Set(),
+    loginStreak: 0,
+    diasSemErroHorario: 0,
+    antrixSemGastar: 0,
+    // ...
+  });
   const [modalLoja, setModalLoja]     = useState(false);
   const [modalRanking, setModalRanking] = useState(false);
   const [globalRanking, setGlobalRanking] = useState([]);
   const [loadingRanking, setLoadingRanking] = useState(false);
+  // Modal para equipar selo
+  const [modalSelo, setModalSelo] = useState(false);
 
   // ── OTA ─────────────────────────────────────────────────────────────────────
   const [otaInfo, setOtaInfo]         = useState(null);
@@ -237,8 +434,6 @@ export default function App() {
   const [modalTema, setModalTema]       = useState(false);
   const [modalAdmin, setModalAdmin]     = useState(false);
   const [modalInicio, setModalInicio]   = useState(false);
-  const [modalFotoUrl, setModalFotoUrl] = useState(false);
-  const [urlFotoTemp, setUrlFotoTemp]   = useState('');
   const [modalGenero, setModalGenero]   = useState(false);
   const [modalHorario, setModalHorario] = useState(false);
   const [horarioInput, setHorarioInput] = useState('20:30');
@@ -248,7 +443,8 @@ export default function App() {
   const pulseBtn = useRef(new Animated.Value(1)).current;
   const [confete, setConfete] = useState(false);
 
-  const ABAS = ['home', 'calendario', 'ranking', 'sugestoes', 'perfil'];
+  // Abas (agora com 7)
+  const ABAS = ['home', 'calendario', 'ranking', 'loja', 'conquistas', 'sugestoes', 'perfil'];
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
@@ -266,9 +462,9 @@ export default function App() {
   const s       = makeStyles(tema);
   const listenersRef = useRef([]);
 
-  // ══════════════════════════════════════════════════════════════════════════
+  // ────────────────────────────────────────────────────────────────────────────
   // LIFECYCLE
-  // ══════════════════════════════════════════════════════════════════════════
+  // ────────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       try {
@@ -279,7 +475,7 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // OTA: escuta /config no Firebase em tempo real
+  // OTA
   useEffect(() => {
     if (!db) return;
     const r = ref(db, 'config');
@@ -311,13 +507,20 @@ export default function App() {
     }
   }, [casalId]);
 
-  // ══════════════════════════════════════════════════════════════════════════
+  // ────────────────────────────────────────────────────────────────────────────
   // CORE FUNCTIONS
-  // ══════════════════════════════════════════════════════════════════════════
+  // ────────────────────────────────────────────────────────────────────────────
   function resetEstado() {
     setHistorico({}); setPausa(null); setPontos({ ana: 0, harlley: 0 });
     setDataInicio(null); setFotos({}); setCasalId(null); setPerfil(null); setCasalConfig({});
-    setAntrix(0); setIndPontos(0); setStreak(0); setConquistas([]);
+    setAntrix(0); setIndPontos(0); setStreak(0); setItensComprados({ temas: [], selos: [] });
+    setSeloEquipado(null); setConquistasDesbloqueadas({});
+    setEstatisticas({
+      rankPrimeiro: 0, rankPrimeiroConsecutivo: 0, antrixTotal: 0,
+      totalTemasComprados: 0, totalTemasRarosComprados: 0, totalTemasLendariosComprados: 0,
+      totalSelosComprados: 0, tomadasHorarioPerfeito: 0, temasDiferentesUsados: new Set(),
+      loginStreak: 0, diasSemErroHorario: 0, antrixSemGastar: 0
+    });
   }
 
   async function carregarPerfil(uid) {
@@ -326,12 +529,20 @@ export default function App() {
       if (!snap.exists()) { setTela('auth'); return; }
       const p = snap.val();
       setPerfil({ ...p, uid });
-      // Carrega os novos campos individuais
+      // Carrega os novos campos
       setAntrix(p.antrix || 0);
       setIndPontos(p.indPontos || 0);
       setStreak(p.streak || 0);
-      setConquistas(p.conquistas || []);
-      if (!p.genero) setModalGenero(true); // onboarding
+      setItensComprados(p.itensComprados || { temas: [], selos: [] });
+      setSeloEquipado(p.seloEquipado || null);
+      setConquistasDesbloqueadas(p.conquistas || {});
+      if (p.estatisticas) {
+        setEstatisticas({
+          ...p.estatisticas,
+          temasDiferentesUsados: new Set(p.estatisticas.temasDiferentesUsados || [])
+        });
+      }
+      if (!p.genero) setModalGenero(true);
       if (p.casalId) {
         setCasalId(p.casalId);
         setTela('app');
@@ -392,17 +603,41 @@ export default function App() {
     listenersRef.current = [];
   }
 
-  function aplicarTema(t) {
-    const nome = typeof t === 'string' ? t : t?.nome;
-    if (nome && TEMAS[nome]) { setTemaNome(nome); setTemaState(TEMAS[nome]); }
+  function aplicarTema(idOuNome) {
+    // Se for objeto do Firebase (string id)
+    const id = typeof idOuNome === 'string' ? idOuNome : idOuNome?.id;
+    if (!id) return;
+    // Busca o tema na loja
+    const temaEncontrado = getTemaById(id);
+    if (temaEncontrado) {
+      // Converte para o formato de tema usado no estilo
+      // Para simplificar, vamos usar cores baseadas no id, mas você pode mapear para um objeto de estilo
+      // Por enquanto, vamos usar um tema base e modificar primary e bg
+      const newTheme = { ...TEMAS_BASE.roxo, primary: temaEncontrado.cor, bg: '#0a0010', card: '#130020', border: '#2a1040' };
+      setTemaState(newTheme);
+      setTemaAtualId(id);
+      // Atualizar estatística de temas diferentes usados
+      setEstatisticas(prev => {
+        const novos = new Set(prev.temasDiferentesUsados);
+        if (!novos.has(id)) novos.add(id);
+        return { ...prev, temasDiferentesUsados: novos };
+      });
+    } else {
+      // fallback
+      setTemaState(TEMAS_BASE.roxo);
+      setTemaAtualId('roxo');
+    }
   }
 
-  async function salvarTema(nome) {
-    try { await set(ref(db, `casais/${casalId}/tema`), nome); setModalTema(false); }
-    catch(e) { Alert.alert('Erro', 'Não foi possível salvar o tema.'); }
+  async function salvarTema(id) {
+    try {
+      await set(ref(db, `casais/${casalId}/tema`), id);
+      aplicarTema(id);
+      setModalTema(false);
+    } catch(e) { Alert.alert('Erro', 'Não foi possível salvar o tema.'); }
   }
 
-  // Notificações: mesmo código original
+  // Notificações (mesmo código)
   async function configurarAlarmes(cid) {
     try {
       if (!Device.isDevice) return;
@@ -452,7 +687,6 @@ export default function App() {
       const cred = await createUserWithEmailAndPassword(auth, authEmail.trim(), authSenha);
       await updateProfile(cred.user, { displayName: authNome.trim() });
       const isHarlley = authEmail.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
-      // Inicializa os novos campos individuais
       await set(ref(db, `usuarios/${cred.user.uid}`), {
         nome: authNome.trim(),
         email: authEmail.trim().toLowerCase(),
@@ -463,7 +697,23 @@ export default function App() {
         antrix: 0,
         indPontos: 0,
         streak: 0,
-        conquistas: []
+        itensComprados: { temas: [], selos: [] },
+        seloEquipado: null,
+        conquistas: {},
+        estatisticas: {
+          rankPrimeiro: 0,
+          rankPrimeiroConsecutivo: 0,
+          antrixTotal: 0,
+          totalTemasComprados: 0,
+          totalTemasRarosComprados: 0,
+          totalTemasLendariosComprados: 0,
+          totalSelosComprados: 0,
+          tomadasHorarioPerfeito: 0,
+          temasDiferentesUsados: [],
+          loginStreak: 0,
+          diasSemErroHorario: 0,
+          antrixSemGastar: 0,
+        }
       });
     } catch(e) { setAuthErro('Erro no cadastro.'); }
     setAuthLoading(false);
@@ -534,25 +784,21 @@ export default function App() {
     } catch(e) { Alert.alert('Erro', 'Falha ao salvar horário.'); }
   }
 
-  // ── NOVAS FUNÇÕES: Recompensa, Streak, Antrix, Conquistas ───────────────────
+  // ── FUNÇÕES DE RECOMPENSA E CONQUISTAS ───────────────────────────────────────
   function calcularRecompensa(streakAtual) {
     let pontosGanhos = 10;
     let antrixGanho = 5;
-
     if (streakAtual >= 2) pontosGanhos = 15;
     if (streakAtual >= 3) pontosGanhos = 20;
     if (streakAtual >= 4) pontosGanhos = 30;
     if (streakAtual >= 5) pontosGanhos = 50;
-
     if (streakAtual >= 2) antrixGanho = 7;
     if (streakAtual >= 3) antrixGanho = 10;
     if (streakAtual >= 4) antrixGanho = 15;
     if (streakAtual >= 5) antrixGanho = 25;
-
     return { pontosGanhos, antrixGanho };
   }
 
-  // Calcula o streak atual baseado no histórico
   function calcularStreakAtual() {
     if (!dataInicio) return 0;
     let streakAtual = 0;
@@ -568,48 +814,108 @@ export default function App() {
     return streakAtual;
   }
 
-  async function verificarConquistas(streakAtual, indPontosAtual, antrixAtual) {
-    let novas = [...conquistas];
-    let mudou = false;
-
-    if (streakAtual >= 3 && !novas.includes('streak3')) {
-      novas.push('streak3');
-      Alert.alert('🏆 Conquista!', '3 dias seguidos!');
-      mudou = true;
-    }
-    if (streakAtual >= 7 && !novas.includes('streak7')) {
-      novas.push('streak7');
-      Alert.alert('🏆 Conquista!', '7 dias seguidos!');
-      mudou = true;
-    }
-    if (streakAtual >= 14 && !novas.includes('streak14')) {
-      novas.push('streak14');
-      Alert.alert('🏆 Conquista!', '14 dias seguidos!');
-      mudou = true;
-    }
-    if (indPontosAtual >= 100 && !novas.includes('100p')) {
-      novas.push('100p');
-      Alert.alert('🏆 Conquista!', '100 pontos individuais!');
-      mudou = true;
-    }
-    if (antrixAtual >= 200 && !novas.includes('200a')) {
-      novas.push('200a');
-      Alert.alert('🏆 Conquista!', '200 Antrix!');
-      mudou = true;
-    }
-    if (indPontosAtual >= 500 && !novas.includes('500p')) {
-      novas.push('500p');
-      Alert.alert('🏆 Conquista!', '500 pontos individuais!');
-      mudou = true;
-    }
-
-    if (mudou) {
-      setConquistas(novas);
-      await update(ref(db, `usuarios/${authUser.uid}`), { conquistas: novas });
+  async function verificarTodasConquistas() {
+    // Coletar dados atuais
+    const dados = {
+      streak,
+      indPontos,
+      antrix,
+      rankPrimeiro: estatisticas.rankPrimeiro,
+      rankPrimeiroConsecutivo: estatisticas.rankPrimeiroConsecutivo,
+      antrixTotal: estatisticas.antrixTotal,
+      totalTemasComprados: estatisticas.totalTemasComprados,
+      totalTemasRarosComprados: estatisticas.totalTemasRarosComprados,
+      totalTemasLendariosComprados: estatisticas.totalTemasLendariosComprados,
+      totalSelosComprados: estatisticas.totalSelosComprados,
+      tomadasHorarioPerfeito: estatisticas.tomadasHorarioPerfeito,
+      temasDiferentesUsados: estatisticas.temasDiferentesUsados.size,
+      loginStreak: estatisticas.loginStreak,
+      diasSemErroHorario: estatisticas.diasSemErroHorario,
+      antrixSemGastar: estatisticas.antrixSemGastar,
+    };
+    // Percorrer todas as categorias de conquistas
+    for (const categoria of Object.values(CONQUISTAS)) {
+      for (const conquista of categoria) {
+        const id = conquista.id;
+        if (!conquistasDesbloqueadas[id] && conquista.cond(dados)) {
+          // Desbloquear
+          setConquistasDesbloqueadas(prev => ({ ...prev, [id]: { desbloqueada: true, data: new Date().toISOString() } }));
+          // Aplicar recompensa
+          if (conquista.recompensa.antrix) {
+            const novoAntrix = antrix + conquista.recompensa.antrix;
+            setAntrix(novoAntrix);
+            await update(ref(db, `usuarios/${authUser.uid}`), { antrix: novoAntrix });
+            setEstatisticas(prev => ({ ...prev, antrixTotal: prev.antrixTotal + conquista.recompensa.antrix }));
+          }
+          if (conquista.recompensa.tema) {
+            const temaRecompensa = RECOMPENSAS_TEMAS[conquista.recompensa.tema];
+            if (temaRecompensa && !itensComprados.temas.includes(temaRecompensa.id)) {
+              // Adicionar tema aos itens comprados gratuitamente
+              await comprarItem(temaRecompensa.id, 0, 'tema', true); // gratuito
+            }
+          }
+          // Salvar conquista no Firebase
+          await update(ref(db, `usuarios/${authUser.uid}/conquistas/${id}`), { desbloqueada: true, data: new Date().toISOString() });
+          // Exibir alerta
+          const nomeExibido = conquista.nomeRevelado || conquista.nome;
+          Alert.alert('🏆 Conquista desbloqueada!', `${nomeExibido}`);
+        }
+      }
     }
   }
 
-  // Função principal de marcar a pílula com recompensas individuais
+  // ── LOJA: comprar item ───────────────────────────────────────────────────────
+  async function comprarItem(itemId, preco, tipo, gratuito = false) {
+    if (!gratuito && antrix < preco) {
+      Alert.alert('Antrix insuficiente', `Você tem ${antrix} Antrix. Preço: ${preco}`);
+      return false;
+    }
+    if (itensComprados[tipo].includes(itemId)) {
+      Alert.alert('Você já possui este item');
+      return false;
+    }
+    if (!gratuito) {
+      const novoAntrix = antrix - preco;
+      setAntrix(novoAntrix);
+      await update(ref(db, `usuarios/${authUser.uid}`), { antrix: novoAntrix });
+      setEstatisticas(prev => ({ ...prev, antrixTotal: prev.antrixTotal + preco, antrixSemGastar: 0 })); // reseta o contador de não gastar? Não, apenas atualiza
+    }
+    setItensComprados(prev => ({
+      ...prev,
+      [tipo]: [...prev[tipo], itemId]
+    }));
+    await update(ref(db, `usuarios/${authUser.uid}/itensComprados/${tipo}`), [...itensComprados[tipo], itemId]);
+    if (tipo === 'tema') {
+      // Atualizar estatísticas de temas comprados
+      setEstatisticas(prev => ({
+        ...prev,
+        totalTemasComprados: prev.totalTemasComprados + 1,
+        totalTemasRarosComprados: prev.totalTemasRarosComprados + (isTemaRaro(itemId) ? 1 : 0),
+        totalTemasLendariosComprados: prev.totalTemasLendariosComprados + (isTemaLendario(itemId) ? 1 : 0),
+      }));
+      await update(ref(db, `usuarios/${authUser.uid}/estatisticas`), {
+        totalTemasComprados: estatisticas.totalTemasComprados + 1,
+        totalTemasRarosComprados: estatisticas.totalTemasRarosComprados + (isTemaRaro(itemId) ? 1 : 0),
+        totalTemasLendariosComprados: estatisticas.totalTemasLendariosComprados + (isTemaLendario(itemId) ? 1 : 0),
+      });
+    } else if (tipo === 'selo') {
+      setEstatisticas(prev => ({ ...prev, totalSelosComprados: prev.totalSelosComprados + 1 }));
+      await update(ref(db, `usuarios/${authUser.uid}/estatisticas`), { totalSelosComprados: estatisticas.totalSelosComprados + 1 });
+    }
+    Alert.alert(gratuito ? 'Recompensa recebida!' : 'Compra realizada!', `${gratuito ? 'Item desbloqueado' : 'Item adquirido'}.`);
+    // Após compra, verificar conquistas relacionadas a compras
+    await verificarTodasConquistas();
+    return true;
+  }
+
+  function isTemaRaro(itemId) {
+    return ITENS_LOJA.temas.raro.some(t => t.id === itemId);
+  }
+  function isTemaLendario(itemId) {
+    return ITENS_LOJA.temas.lendario.some(t => t.id === itemId);
+  }
+
+  // ── Função principal marcarTomou (completa) ───────────────────────────────────
   async function marcarTomou() {
     if (!casalId) return;
     if (pausa?.ativa) {
@@ -657,9 +963,16 @@ export default function App() {
       setIndPontos(novoIndPontos);
       setAntrix(novoAntrix);
       setStreak(novoStreak);
+      setEstatisticas(prev => ({
+        ...prev,
+        antrixTotal: prev.antrixTotal + antrixGanho,
+        antrixSemGastar: prev.antrixSemGastar + antrixGanho,
+        tomadasHorarioPerfeito: prev.tomadasHorarioPerfeito + (naJanela ? 1 : 0),
+        diasSemErroHorario: naJanela ? prev.diasSemErroHorario + 1 : 0
+      }));
 
-      // Verifica conquistas
-      await verificarConquistas(novoStreak, novoIndPontos, novoAntrix);
+      // Verificar conquistas (após atualizações)
+      await verificarTodasConquistas();
 
       // --- Efeitos visuais ---
       const total = Object.keys(historico).length + 1;
@@ -679,6 +992,7 @@ export default function App() {
     }
   }
 
+  // ── Outras funções auxiliares ────────────────────────────────────────────────
   async function adminToggleDia(key) {
     if (!isAdmin) return;
     try {
@@ -705,16 +1019,6 @@ export default function App() {
     try { await set(ref(db, `casais/${casalId}/pausa/ativa`), false); } catch(e) {}
   }
 
-  async function escolherFoto() { setModalFotoUrl(true); }
-
-  async function salvarFotoUrl() {
-    if (!urlFotoTemp.trim()) return;
-    try {
-      await set(ref(db, `casais/${casalId}/fotos/${authUser.uid}`), urlFotoTemp.trim());
-      setUrlFotoTemp(''); setModalFotoUrl(false);
-    } catch(e) {}
-  }
-
   async function enviarSugestao() {
     if (!sugestao.trim()) return;
     try {
@@ -723,20 +1027,6 @@ export default function App() {
       });
       setSugestao(''); Alert.alert('Sucesso', 'Sugestão enviada!');
     } catch(e) {}
-  }
-
-  // ── LOJA: comprar temas com Antrix ───────────────────────────────────────────
-  async function comprarTema(nome, preco) {
-    if (antrix < preco) {
-      Alert.alert('Antrix insuficiente', `Você tem ${antrix} Antrix. Preço: ${preco}`);
-      return;
-    }
-    const novoAntrix = antrix - preco;
-    setAntrix(novoAntrix);
-    await update(ref(db, `usuarios/${authUser.uid}`), { antrix: novoAntrix });
-    await salvarTema(nome);
-    Alert.alert('🎉 Tema comprado!', `Você comprou o tema ${nome} por ${preco} Antrix.`);
-    setModalLoja(false);
   }
 
   // ── RANKING GLOBAL ───────────────────────────────────────────────────────────
@@ -766,6 +1056,35 @@ export default function App() {
     }
     setLoadingRanking(false);
     setModalRanking(true);
+  }
+
+  // ── SELO: equipar ────────────────────────────────────────────────────────────
+  async function equiparSelo(seloId) {
+    setSeloEquipado(seloId);
+    await update(ref(db, `usuarios/${authUser.uid}`), { seloEquipado: seloId });
+    setModalSelo(false);
+    Alert.alert('Selo equipado!');
+  }
+
+  // ── FOTO: galeria ───────────────────────────────────────────────────────────
+  async function escolherFotoGaleria() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permissão negada', 'Precisamos acessar sua galeria para escolher uma foto.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 1,
+    });
+    if (!result.canceled && result.assets[0].uri) {
+      const uri = result.assets[0].uri;
+      await set(ref(db, `casais/${casalId}/fotos/${authUser.uid}`), uri);
+      setFotos(prev => ({ ...prev, [authUser.uid]: uri }));
+      Alert.alert('Foto atualizada!');
+    }
   }
 
   // ── OTA ─────────────────────────────────────────────────────────────────────
@@ -811,14 +1130,13 @@ export default function App() {
   const meuHorario = casalConfig?.horarioPessoal?.[authUser?.uid];
   const baixando   = otaProgress > 0 && otaProgress < 1;
 
-  // Mapeia conquistas para nomes legíveis
-  const conquistasNomes = {
-    streak3: '🔥 3 dias seguidos',
-    streak7: '💎 7 dias seguidos',
-    streak14: '🌟 14 dias seguidos',
-    '100p': '✨ 100 pontos individuais',
-    '500p': '🏅 500 pontos individuais',
-    '200a': '💰 200 Antrix',
+  // Mapeia conquistas para exibição
+  const getConquistaNome = (id) => {
+    for (const cat of Object.values(CONQUISTAS)) {
+      const c = cat.find(c => c.id === id);
+      if (c) return c.nomeRevelado || c.nome;
+    }
+    return id;
   };
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -901,7 +1219,7 @@ export default function App() {
     <View style={s.root}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={false} />
 
-      {/* Modal OTA */}
+      {/* Modais (OTA, Amor, Admin, etc.) - mantidos */}
       <Modal transparent visible={modalOta} animationType="slide"
         onRequestClose={() => { if (!otaInfo?.forcarAtualizar) ignorarOta(); }}>
         <View style={s.modalWrap}><View style={s.modalCard}>
@@ -929,7 +1247,6 @@ export default function App() {
         </View></View>
       </Modal>
 
-      {/* Modal Amor */}
       <Modal transparent visible={modalAmor} animationType="none">
         <Animated.View style={[s.modalAmor, { opacity: fadeAmor }]}>
           <Text style={{ fontSize: 80 }}>💕</Text>
@@ -937,39 +1254,28 @@ export default function App() {
         </Animated.View>
       </Modal>
 
-      {/* Modal Foto */}
-      <Modal transparent visible={modalFotoUrl} animationType="slide">
-        <View style={s.modalWrap}><View style={s.modalCard}>
-          <Text style={s.modalTitulo}>📷 URL da foto</Text>
-          <TextInput style={s.input} placeholder="https://..." placeholderTextColor="#555"
-            value={urlFotoTemp} onChangeText={setUrlFotoTemp} />
-          <TouchableOpacity style={s.btnPrimary} onPress={salvarFotoUrl}>
-            <Text style={s.btnPrimaryTxt}>✅ Salvar</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={s.btnSecondary} onPress={() => setModalFotoUrl(false)}>
-            <Text style={s.btnSecondaryTxt}>Cancelar</Text>
-          </TouchableOpacity>
-        </View></View>
-      </Modal>
-
-      {/* Modal Tema (configuração de tema, mantido) */}
       <Modal transparent visible={modalTema} animationType="slide">
         <View style={s.modalWrap}><View style={s.modalCard}>
-          <Text style={s.modalTitulo}>🎨 Tema</Text>
-          {Object.entries(TEMAS).map(([nome, t]) => (
-            <TouchableOpacity key={nome} style={[s.temaBtn, temaNome === nome && { borderColor: t.primary }]}
-              onPress={() => salvarTema(nome)}>
-              <View style={[s.temaCor, { backgroundColor: t.primary }]} />
-              <Text style={s.temaTxt}>{nome}</Text>
-            </TouchableOpacity>
-          ))}
+          <Text style={s.modalTitulo}>🎨 Escolher tema</Text>
+          <ScrollView style={{ maxHeight: 400 }}>
+            {itensComprados.temas.map(temaId => {
+              const temaItem = getTemaById(temaId);
+              if (!temaItem) return null;
+              return (
+                <TouchableOpacity key={temaId} style={[s.temaBtn, temaAtualId === temaId && { borderColor: temaItem.cor }]}
+                  onPress={() => salvarTema(temaId)}>
+                  <View style={[s.temaCor, { backgroundColor: temaItem.cor }]} />
+                  <Text style={s.temaTxt}>{temaItem.nome}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
           <TouchableOpacity style={s.btnSecondary} onPress={() => setModalTema(false)}>
             <Text style={s.btnSecondaryTxt}>Fechar</Text>
           </TouchableOpacity>
         </View></View>
       </Modal>
 
-      {/* Modal Admin */}
       <Modal transparent visible={modalAdmin} animationType="slide">
         <View style={s.modalWrap}><View style={s.modalCard}>
           <Text style={s.modalTitulo}>👑 Admin</Text>
@@ -990,7 +1296,6 @@ export default function App() {
         </View></View>
       </Modal>
 
-      {/* Modal Início da Cartela */}
       <Modal transparent visible={modalInicio} animationType="slide">
         <View style={s.modalWrap}><View style={s.modalCard}>
           <Text style={s.modalTitulo}>📅 Início da cartela</Text>
@@ -1025,7 +1330,6 @@ export default function App() {
         </View></View>
       </Modal>
 
-      {/* Modal Gênero (onboarding) */}
       <Modal transparent visible={modalGenero} animationType="slide">
         <View style={s.modalWrap}><View style={s.modalCard}>
           <Text style={s.modalTitulo}>👤 Qual é o seu gênero?</Text>
@@ -1045,7 +1349,6 @@ export default function App() {
         </View></View>
       </Modal>
 
-      {/* Modal Horário Pessoal */}
       <Modal transparent visible={modalHorario} animationType="slide">
         <View style={s.modalWrap}><View style={s.modalCard}>
           <Text style={s.modalTitulo}>⏰ Horário pessoal</Text>
@@ -1063,28 +1366,32 @@ export default function App() {
         </View></View>
       </Modal>
 
-      {/* NOVO MODAL: Loja */}
-      <Modal transparent visible={modalLoja} animationType="slide">
+      <Modal transparent visible={modalSelo} animationType="slide">
         <View style={s.modalWrap}><View style={s.modalCard}>
-          <Text style={s.modalTitulo}>🛒 Loja</Text>
-          <Text style={[s.authSub, { textAlign: 'left', marginBottom: 10 }]}>Seus Antrix: {antrix}</Text>
+          <Text style={s.modalTitulo}>✨ Equipar selo</Text>
           <ScrollView style={{ maxHeight: 400 }}>
-            {Object.entries(TEMAS).map(([nome, t]) => (
-              <TouchableOpacity key={nome}
-                style={[s.temaBtn, temaNome === nome && { borderColor: t.primary }]}
-                onPress={() => comprarTema(nome, t.preco)}>
-                <View style={[s.temaCor, { backgroundColor: t.primary }]} />
-                <Text style={s.temaTxt}>{nome} - {t.preco} Antrix</Text>
-              </TouchableOpacity>
-            ))}
+            {itensComprados.selos.map(seloId => {
+              let seloItem = null;
+              for (let cat of Object.values(ITENS_LOJA.selos)) {
+                const found = cat.find(s => s.id === seloId);
+                if (found) { seloItem = found; break; }
+              }
+              if (!seloItem) return null;
+              return (
+                <TouchableOpacity key={seloId} style={[s.temaBtn, seloEquipado === seloId && { borderColor: tema.primary }]}
+                  onPress={() => equiparSelo(seloId)}>
+                  <Text style={{ fontSize: 24, marginRight: 15 }}>{seloItem.emoji}</Text>
+                  <Text style={s.temaTxt}>{seloItem.nome}</Text>
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
-          <TouchableOpacity style={s.btnSecondary} onPress={() => setModalLoja(false)}>
+          <TouchableOpacity style={s.btnSecondary} onPress={() => setModalSelo(false)}>
             <Text style={s.btnSecondaryTxt}>Fechar</Text>
           </TouchableOpacity>
         </View></View>
       </Modal>
 
-      {/* NOVO MODAL: Ranking Global */}
       <Modal transparent visible={modalRanking} animationType="slide">
         <View style={s.modalWrap}><View style={s.modalCard}>
           <Text style={s.modalTitulo}>🏆 Ranking Global</Text>
@@ -1128,15 +1435,18 @@ export default function App() {
         </View>
       </View>
 
-      {/* Abas */}
+      {/* Abas (7) */}
       <View style={s.abas}>
-        {[['home','🏠'],['calendario','📅'],['ranking','🏆'],['sugestoes','💡'],['perfil','👤']].map(([aba, ic]) => (
-          <TouchableOpacity key={aba}
-            style={[s.aba, abaAtiva === aba && { borderBottomWidth: 2, borderBottomColor: tema.primary }]}
-            onPress={() => setAbaAtiva(aba)}>
-            <Text style={[s.abaTxt, abaAtiva === aba && { opacity: 1 }]}>{ic}</Text>
-          </TouchableOpacity>
-        ))}
+        {ABAS.map((aba) => {
+          const icones = { home:'🏠', calendario:'📅', ranking:'🏆', loja:'🛒', conquistas:'🏅', sugestoes:'💡', perfil:'👤' };
+          return (
+            <TouchableOpacity key={aba}
+              style={[s.aba, abaAtiva === aba && { borderBottomWidth: 2, borderBottomColor: tema.primary }]}
+              onPress={() => setAbaAtiva(aba)}>
+              <Text style={[s.abaTxt, abaAtiva === aba && { opacity: 1 }]}>{icones[aba]}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       <ScrollView style={s.body} contentContainerStyle={s.bodyContent} {...panResponder.panHandlers}>
@@ -1207,7 +1517,7 @@ export default function App() {
           </View>
         </>}
 
-        {/* RANKING (dupla) - mantido */}
+        {/* RANKING (dupla) */}
         {abaAtiva === 'ranking' && <>
           <Text style={s.secLabel}>🏆 Ranking da dupla</Text>
           <View style={[s.rankCard, { borderLeftWidth: 4, borderLeftColor: tema.primary }]}>
@@ -1230,6 +1540,116 @@ export default function App() {
           </Text>
         </>}
 
+        {/* LOJA */}
+        {abaAtiva === 'loja' && <>
+          <Text style={s.secLabel}>🛒 LOJA</Text>
+          <Text style={s.statsInfo}>Seus Antrix: {antrix}</Text>
+          {/* Temas Comuns */}
+          <Text style={s.catTitulo}>🎨 Temas Comuns (20 Antrix)</Text>
+          <View style={s.lojaGrid}>
+            {ITENS_LOJA.temas.comum.map(item => (
+              <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.temas.includes(item.id) && s.lojaItemOwned]}
+                onPress={() => comprarItem(item.id, item.preco, 'tema')} disabled={itensComprados.temas.includes(item.id)}>
+                <View style={[s.corTema, { backgroundColor: item.cor }]} />
+                <Text style={s.lojaNome}>{item.nome}</Text>
+                <Text style={s.lojaPreco}>{item.preco}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {/* Temas Raros */}
+          <Text style={s.catTitulo}>💎 Temas Raros (80 Antrix)</Text>
+          <View style={s.lojaGrid}>
+            {ITENS_LOJA.temas.raro.map(item => (
+              <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.temas.includes(item.id) && s.lojaItemOwned]}
+                onPress={() => comprarItem(item.id, item.preco, 'tema')} disabled={itensComprados.temas.includes(item.id)}>
+                <View style={[s.corTema, { backgroundColor: item.cor }]} />
+                <Text style={s.lojaNome}>{item.nome}</Text>
+                <Text style={s.lojaPreco}>{item.preco}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {/* Temas Bonitos */}
+          <Text style={s.catTitulo}>✨ Temas Bonitos (200 Antrix)</Text>
+          <View style={s.lojaGrid}>
+            {ITENS_LOJA.temas.bonito.map(item => (
+              <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.temas.includes(item.id) && s.lojaItemOwned]}
+                onPress={() => comprarItem(item.id, item.preco, 'tema')} disabled={itensComprados.temas.includes(item.id)}>
+                <View style={[s.corTema, { backgroundColor: item.cor }]} />
+                <Text style={s.lojaNome}>{item.nome}</Text>
+                <Text style={s.lojaPreco}>{item.preco}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {/* Temas Lendários */}
+          <Text style={s.catTitulo}>🏆 Temas Lendários (500 Antrix)</Text>
+          <View style={s.lojaGrid}>
+            {ITENS_LOJA.temas.lendario.map(item => (
+              <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.temas.includes(item.id) && s.lojaItemOwned]}
+                onPress={() => comprarItem(item.id, item.preco, 'tema')} disabled={itensComprados.temas.includes(item.id)}>
+                <View style={[s.corTema, { backgroundColor: item.cor }]} />
+                <Text style={s.lojaNome}>{item.nome}</Text>
+                <Text style={s.lojaPreco}>{item.preco}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {/* Selos Comuns */}
+          <Text style={s.catTitulo}>🟢 Selos Comuns (15 Antrix)</Text>
+          <View style={s.lojaGrid}>
+            {ITENS_LOJA.selos.comum.map(item => (
+              <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.selos.includes(item.id) && s.lojaItemOwned]}
+                onPress={() => comprarItem(item.id, item.preco, 'selo')} disabled={itensComprados.selos.includes(item.id)}>
+                <Text style={{ fontSize: 24, marginRight: 8 }}>{item.emoji}</Text>
+                <Text style={s.lojaNome}>{item.nome}</Text>
+                <Text style={s.lojaPreco}>{item.preco}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {/* Selos Raros */}
+          <Text style={s.catTitulo}>🔵 Selos Raros (60 Antrix)</Text>
+          <View style={s.lojaGrid}>
+            {ITENS_LOJA.selos.raro.map(item => (
+              <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.selos.includes(item.id) && s.lojaItemOwned]}
+                onPress={() => comprarItem(item.id, item.preco, 'selo')} disabled={itensComprados.selos.includes(item.id)}>
+                <Text style={{ fontSize: 24, marginRight: 8 }}>{item.emoji}</Text>
+                <Text style={s.lojaNome}>{item.nome}</Text>
+                <Text style={s.lojaPreco}>{item.preco}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {/* Selos Lendários */}
+          <Text style={s.catTitulo}>🟣 Selos Lendários (300 Antrix)</Text>
+          <View style={s.lojaGrid}>
+            {ITENS_LOJA.selos.lendario.map(item => (
+              <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.selos.includes(item.id) && s.lojaItemOwned]}
+                onPress={() => comprarItem(item.id, item.preco, 'selo')} disabled={itensComprados.selos.includes(item.id)}>
+                <Text style={{ fontSize: 24, marginRight: 8 }}>{item.emoji}</Text>
+                <Text style={s.lojaNome}>{item.nome}</Text>
+                <Text style={s.lojaPreco}>{item.preco}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </>}
+
+        {/* CONQUISTAS */}
+        {abaAtiva === 'conquistas' && <>
+          <Text style={s.secLabel}>🏅 CONQUISTAS</Text>
+          {Object.entries(CONQUISTAS).map(([categoria, lista]) => (
+            <View key={categoria}>
+              <Text style={s.catConquista}>{categoria.toUpperCase()}</Text>
+              {lista.map(conq => {
+                const desbloq = conquistasDesbloqueadas[conq.id];
+                const nome = desbloq ? (conq.nomeRevelado || conq.nome) : (conq.nomeSecreto || '???');
+                return (
+                  <View key={conq.id} style={s.conquistaItem}>
+                    <Text style={[s.conquistaNome, desbloq && s.conquistaDesbloq]}>{nome}</Text>
+                    {desbloq && <Text style={s.conquistaCheck}>✅</Text>}
+                  </View>
+                );
+              })}
+            </View>
+          ))}
+        </>}
+
         {/* SUGESTÕES */}
         {abaAtiva === 'sugestoes' && <>
           <Text style={s.secLabel}>💡 Sugestões</Text>
@@ -1246,10 +1666,10 @@ export default function App() {
           </TouchableOpacity>
         </>}
 
-        {/* PERFIL (com informações individuais e botões para Loja e Ranking) */}
+        {/* PERFIL */}
         {abaAtiva === 'perfil' && <>
           <View style={s.perfilCard}>
-            <TouchableOpacity onPress={escolherFoto}>
+            <TouchableOpacity onPress={escolherFotoGaleria}>
               {fotoAtual
                 ? <Image source={{ uri: fotoAtual }} style={s.fotoPerfil} />
                 : <View style={s.fotoPerfilVazio}><Text style={{ fontSize: 40 }}>📷</Text></View>
@@ -1261,7 +1681,7 @@ export default function App() {
                 {perfil.genero === 'mulher' ? '👩 Mulher' : perfil.genero === 'homem' ? '👨 Homem' : '⚪ Não informado'}
               </Text>
             )}
-            {/* Novas estatísticas */}
+            {/* Estatísticas */}
             <View style={s.statsRow}>
               <View style={s.statItem}>
                 <Text style={s.statValue}>{indPontos}</Text>
@@ -1276,16 +1696,24 @@ export default function App() {
                 <Text style={s.statLabel}>Streak</Text>
               </View>
             </View>
-            {/* Conquistas */}
-            {conquistas.length > 0 && (
-              <View style={s.conquistasBox}>
-                <Text style={s.conquistasTitulo}>🏅 Conquistas</Text>
-                {conquistas.map((c, i) => (
-                  <Text key={i} style={s.conquistaItem}>{conquistasNomes[c] || c}</Text>
-                ))}
-              </View>
-            )}
-            <Text style={s.perfilVersao}>v{VERSAO_ATUAL}</Text>
+            {/* Selo equipado */}
+            {seloEquipado && (() => {
+              let seloItem = null;
+              for (let cat of Object.values(ITENS_LOJA.selos)) {
+                const found = cat.find(s => s.id === seloEquipado);
+                if (found) { seloItem = found; break; }
+              }
+              return (
+                <View style={s.seloEquipado}>
+                  <Text style={{ fontSize: 20, marginRight: 8 }}>{seloItem?.emoji || '✨'}</Text>
+                  <Text style={{ color: tema.sub }}>Selo equipado</Text>
+                </View>
+              );
+            })()}
+            <TouchableOpacity style={[s.adminBtn, { width: '100%', marginTop: 8 }]} onPress={() => setModalSelo(true)}>
+              <Text style={s.adminBtnTxt}>✨ Escolher selo</Text>
+            </TouchableOpacity>
+            {/* Botões de configuração */}
             <TouchableOpacity style={[s.adminBtn, { width: '100%', marginTop: 12 }]} onPress={() => {
               setHorarioInput(meuHorario || '20:30');
               setModalHorario(true);
@@ -1297,11 +1725,6 @@ export default function App() {
             <TouchableOpacity style={[s.adminBtn, { width: '100%', marginTop: 8 }]}
               onPress={() => setModalGenero(true)}>
               <Text style={s.adminBtnTxt}>👤 Alterar gênero</Text>
-            </TouchableOpacity>
-            {/* Botões novos */}
-            <TouchableOpacity style={[s.adminBtn, { width: '100%', marginTop: 8, borderColor: '#ffaa00' }]}
-              onPress={() => setModalLoja(true)}>
-              <Text style={[s.adminBtnTxt, { color: '#ffaa00' }]}>🛒 Loja (comprar temas com Antrix)</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[s.adminBtn, { width: '100%', marginTop: 8, borderColor: '#44ff44' }]}
               onPress={carregarRankingGlobal}>
@@ -1393,9 +1816,22 @@ const makeStyles = (tema) => StyleSheet.create({
   statLabel:      { fontSize: 12, color: tema.sub, marginTop: 4 },
   conquistasBox:  { width: '100%', backgroundColor: tema.bg, borderRadius: 12, padding: 12, marginVertical: 10, borderWidth: 1, borderColor: tema.border },
   conquistasTitulo:{ color: '#fff', fontWeight: 'bold', marginBottom: 8, fontSize: 14 },
-  conquistaItem:  { color: tema.sub, fontSize: 12, marginBottom: 4 },
+  conquistaItem:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: tema.border },
+  conquistaNome:  { color: tema.sub, fontSize: 12, flex: 1 },
+  conquistaDesbloq:{ color: '#fff', fontWeight: 'bold' },
+  conquistaCheck:  { color: '#00ff87', fontSize: 16, marginLeft: 8 },
   rankGlobalItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: tema.border },
   rankPos:        { width: 40, fontSize: 16, fontWeight: 'bold', color: tema.primary },
   rankName:       { flex: 1, fontSize: 14, color: '#fff' },
   rankValue:      { fontSize: 14, fontWeight: 'bold', color: tema.primary },
+  statsInfo:      { color: tema.primary, fontSize: 16, fontWeight: 'bold', marginBottom: 10 },
+  catTitulo:      { color: '#fff', fontSize: 14, fontWeight: 'bold', marginTop: 16, marginBottom: 8 },
+  lojaGrid:       { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  lojaItem:       { width: (SW - 60) / 2, backgroundColor: tema.card, borderRadius: 12, padding: 10, marginBottom: 10, alignItems: 'center', borderWidth: 1, borderColor: tema.border },
+  lojaItemOwned:  { opacity: 0.5 },
+  corTema:        { width: 40, height: 40, borderRadius: 20, marginBottom: 8 },
+  lojaNome:       { color: '#fff', fontSize: 12, textAlign: 'center' },
+  lojaPreco:      { color: tema.primary, fontSize: 10, marginTop: 4 },
+  catConquista:   { color: tema.primary, fontSize: 16, fontWeight: 'bold', marginTop: 16, marginBottom: 8 },
+  seloEquipado:   { flexDirection: 'row', alignItems: 'center', backgroundColor: tema.bg, padding: 8, borderRadius: 20, marginVertical: 8 },
 });
