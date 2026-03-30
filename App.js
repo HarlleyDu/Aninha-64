@@ -49,7 +49,6 @@ const TEMAS_BASE = {
   dourado:{ primary:'#ffd60a', bg:'#0a0800', card:'#1a1200', border:'#3a2a00', accent:'#ff9500', text:'#fff', sub:'#ccaa44' },
   ciano:  { primary:'#00e5ff', bg:'#000a10', card:'#001520', border:'#003040', accent:'#0088cc', text:'#fff', sub:'#44aacc' },
   verde:  { primary:'#00ff87', bg:'#000a05', card:'#001510', border:'#003020', accent:'#00cc66', text:'#fff', sub:'#44cc88' },
-  // Temas da loja serão adicionados dinamicamente via estado, mas por enquanto mantemos os base
 };
 
 // ─── LOJA: Itens completos (temas e selos) ─────────────────────────────────────
@@ -219,9 +218,8 @@ const RECOMPENSAS_TEMAS = {
   tema_lenda_absoluta: { id: 'tema_lenda_absoluta', nome: 'Tema Lenda Absoluta', cor: '#ffaa44' }
 };
 
-// ─── Helper para temas dinâmicos ──────────────────────────────────────────────
+// Helper para buscar tema por id
 const getTemaById = (id) => {
-  // Busca em todas as categorias
   for (let cat of Object.values(ITENS_LOJA.temas)) {
     const found = cat.find(t => t.id === id);
     if (found) return found;
@@ -268,7 +266,7 @@ Notifications.setNotificationHandler({
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// CONSISTENCY CIRCLE (mesmo código original)
+// CONSISTENCY CIRCLE
 // ══════════════════════════════════════════════════════════════════════════════
 function ConsistencyCircle({ historico, dataInicio, tema }) {
   const TOTAL  = 28;
@@ -383,7 +381,7 @@ export default function App() {
   const [pontos, setPontos]           = useState({ ana: 0, harlley: 0 });
   const [dataInicio, setDataInicio]   = useState(null);
   const [fotos, setFotos]             = useState({});
-  const [temaAtualId, setTemaAtualId] = useState('roxo'); // id do tema atual
+  const [temaAtualId, setTemaAtualId] = useState('roxo');
   const [tema, setTemaState]          = useState(TEMAS_BASE.roxo);
   const [sugestao, setSugestao]       = useState('');
   const [abaAtiva, setAbaAtiva]       = useState('home');
@@ -396,7 +394,7 @@ export default function App() {
   const [streak, setStreak]           = useState(0);
   const [itensComprados, setItensComprados] = useState({ temas: [], selos: [] });
   const [seloEquipado, setSeloEquipado] = useState(null);
-  const [conquistasDesbloqueadas, setConquistasDesbloqueadas] = useState({}); // id -> {desbloqueada, data}
+  const [conquistasDesbloqueadas, setConquistasDesbloqueadas] = useState({});
   const [estatisticas, setEstatisticas] = useState({
     rankPrimeiro: 0,
     rankPrimeiroConsecutivo: 0,
@@ -410,13 +408,11 @@ export default function App() {
     loginStreak: 0,
     diasSemErroHorario: 0,
     antrixSemGastar: 0,
-    // ...
   });
   const [modalLoja, setModalLoja]     = useState(false);
   const [modalRanking, setModalRanking] = useState(false);
   const [globalRanking, setGlobalRanking] = useState([]);
   const [loadingRanking, setLoadingRanking] = useState(false);
-  // Modal para equipar selo
   const [modalSelo, setModalSelo] = useState(false);
 
   // ── OTA ─────────────────────────────────────────────────────────────────────
@@ -475,7 +471,6 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // OTA
   useEffect(() => {
     if (!db) return;
     const r = ref(db, 'config');
@@ -529,7 +524,6 @@ export default function App() {
       if (!snap.exists()) { setTela('auth'); return; }
       const p = snap.val();
       setPerfil({ ...p, uid });
-      // Carrega os novos campos
       setAntrix(p.antrix || 0);
       setIndPontos(p.indPontos || 0);
       setStreak(p.streak || 0);
@@ -604,26 +598,19 @@ export default function App() {
   }
 
   function aplicarTema(idOuNome) {
-    // Se for objeto do Firebase (string id)
     const id = typeof idOuNome === 'string' ? idOuNome : idOuNome?.id;
     if (!id) return;
-    // Busca o tema na loja
     const temaEncontrado = getTemaById(id);
     if (temaEncontrado) {
-      // Converte para o formato de tema usado no estilo
-      // Para simplificar, vamos usar cores baseadas no id, mas você pode mapear para um objeto de estilo
-      // Por enquanto, vamos usar um tema base e modificar primary e bg
       const newTheme = { ...TEMAS_BASE.roxo, primary: temaEncontrado.cor, bg: '#0a0010', card: '#130020', border: '#2a1040' };
       setTemaState(newTheme);
       setTemaAtualId(id);
-      // Atualizar estatística de temas diferentes usados
       setEstatisticas(prev => {
         const novos = new Set(prev.temasDiferentesUsados);
         if (!novos.has(id)) novos.add(id);
         return { ...prev, temasDiferentesUsados: novos };
       });
     } else {
-      // fallback
       setTemaState(TEMAS_BASE.roxo);
       setTemaAtualId('roxo');
     }
@@ -637,7 +624,6 @@ export default function App() {
     } catch(e) { Alert.alert('Erro', 'Não foi possível salvar o tema.'); }
   }
 
-  // Notificações (mesmo código)
   async function configurarAlarmes(cid) {
     try {
       if (!Device.isDevice) return;
@@ -760,6 +746,23 @@ export default function App() {
     setPairLoading(false);
   }
 
+  // Função para gerar código de convite para a dupla atual (admin)
+  async function gerarCodigoConvite() {
+    if (!casalId) {
+      Alert.alert('Erro', 'Você não está em uma dupla.');
+      return;
+    }
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let chave = '';
+    for (let i = 0; i < 6; i++) chave += chars[Math.floor(Math.random() * chars.length)];
+    try {
+      await set(ref(db, `pairCodes/${chave}`), { casalId });
+      Alert.alert('Código gerado!', `Compartilhe com seu parceiro: ${chave}\nEle deve usar "Entrar com chave".`);
+    } catch(e) {
+      Alert.alert('Erro', 'Falha ao gerar código.');
+    }
+  }
+
   // ── Gênero ──────────────────────────────────────────────────────────────────
   async function salvarGenero(genero) {
     try {
@@ -815,7 +818,6 @@ export default function App() {
   }
 
   async function verificarTodasConquistas() {
-    // Coletar dados atuais
     const dados = {
       streak,
       indPontos,
@@ -833,14 +835,11 @@ export default function App() {
       diasSemErroHorario: estatisticas.diasSemErroHorario,
       antrixSemGastar: estatisticas.antrixSemGastar,
     };
-    // Percorrer todas as categorias de conquistas
     for (const categoria of Object.values(CONQUISTAS)) {
       for (const conquista of categoria) {
         const id = conquista.id;
         if (!conquistasDesbloqueadas[id] && conquista.cond(dados)) {
-          // Desbloquear
           setConquistasDesbloqueadas(prev => ({ ...prev, [id]: { desbloqueada: true, data: new Date().toISOString() } }));
-          // Aplicar recompensa
           if (conquista.recompensa.antrix) {
             const novoAntrix = antrix + conquista.recompensa.antrix;
             setAntrix(novoAntrix);
@@ -850,13 +849,10 @@ export default function App() {
           if (conquista.recompensa.tema) {
             const temaRecompensa = RECOMPENSAS_TEMAS[conquista.recompensa.tema];
             if (temaRecompensa && !itensComprados.temas.includes(temaRecompensa.id)) {
-              // Adicionar tema aos itens comprados gratuitamente
-              await comprarItem(temaRecompensa.id, 0, 'tema', true); // gratuito
+              await comprarItem(temaRecompensa.id, 0, 'tema', true);
             }
           }
-          // Salvar conquista no Firebase
           await update(ref(db, `usuarios/${authUser.uid}/conquistas/${id}`), { desbloqueada: true, data: new Date().toISOString() });
-          // Exibir alerta
           const nomeExibido = conquista.nomeRevelado || conquista.nome;
           Alert.alert('🏆 Conquista desbloqueada!', `${nomeExibido}`);
         }
@@ -878,7 +874,7 @@ export default function App() {
       const novoAntrix = antrix - preco;
       setAntrix(novoAntrix);
       await update(ref(db, `usuarios/${authUser.uid}`), { antrix: novoAntrix });
-      setEstatisticas(prev => ({ ...prev, antrixTotal: prev.antrixTotal + preco, antrixSemGastar: 0 })); // reseta o contador de não gastar? Não, apenas atualiza
+      setEstatisticas(prev => ({ ...prev, antrixTotal: prev.antrixTotal + preco, antrixSemGastar: 0 }));
     }
     setItensComprados(prev => ({
       ...prev,
@@ -886,7 +882,6 @@ export default function App() {
     }));
     await update(ref(db, `usuarios/${authUser.uid}/itensComprados/${tipo}`), [...itensComprados[tipo], itemId]);
     if (tipo === 'tema') {
-      // Atualizar estatísticas de temas comprados
       setEstatisticas(prev => ({
         ...prev,
         totalTemasComprados: prev.totalTemasComprados + 1,
@@ -903,7 +898,6 @@ export default function App() {
       await update(ref(db, `usuarios/${authUser.uid}/estatisticas`), { totalSelosComprados: estatisticas.totalSelosComprados + 1 });
     }
     Alert.alert(gratuito ? 'Recompensa recebida!' : 'Compra realizada!', `${gratuito ? 'Item desbloqueado' : 'Item adquirido'}.`);
-    // Após compra, verificar conquistas relacionadas a compras
     await verificarTodasConquistas();
     return true;
   }
@@ -913,6 +907,69 @@ export default function App() {
   }
   function isTemaLendario(itemId) {
     return ITENS_LOJA.temas.lendario.some(t => t.id === itemId);
+  }
+
+  // ── ADMIN: Ferramentas de teste ───────────────────────────────────────────────
+  async function adminSetAntrixInfinito() {
+    const novoAntrix = 999999;
+    setAntrix(novoAntrix);
+    await update(ref(db, `usuarios/${authUser.uid}`), { antrix: novoAntrix });
+    Alert.alert('Admin', 'Antrix definido para 999999');
+  }
+
+  async function adminDesbloquearTodasConquistas() {
+    const todas = [];
+    for (const cat of Object.values(CONQUISTAS)) {
+      for (const c of cat) {
+        todas.push(c.id);
+      }
+    }
+    const newConquistas = {};
+    for (const id of todas) {
+      newConquistas[id] = { desbloqueada: true, data: new Date().toISOString() };
+    }
+    setConquistasDesbloqueadas(newConquistas);
+    await set(ref(db, `usuarios/${authUser.uid}/conquistas`), newConquistas);
+    Alert.alert('Admin', 'Todas as conquistas desbloqueadas!');
+  }
+
+  async function adminDesbloquearTodosItens() {
+    const todosTemas = [
+      ...ITENS_LOJA.temas.comum.map(t => t.id),
+      ...ITENS_LOJA.temas.raro.map(t => t.id),
+      ...ITENS_LOJA.temas.bonito.map(t => t.id),
+      ...ITENS_LOJA.temas.lendario.map(t => t.id),
+    ];
+    const todosSelos = [
+      ...ITENS_LOJA.selos.comum.map(s => s.id),
+      ...ITENS_LOJA.selos.raro.map(s => s.id),
+      ...ITENS_LOJA.selos.lendario.map(s => s.id),
+    ];
+    setItensComprados({ temas: todosTemas, selos: todosSelos });
+    await set(ref(db, `usuarios/${authUser.uid}/itensComprados`), { temas: todosTemas, selos: todosSelos });
+    Alert.alert('Admin', 'Todos os itens desbloqueados!');
+  }
+
+  async function adminDesbloquearTemasSecretos() {
+    const secretos = Object.values(RECOMPENSAS_TEMAS).map(t => t.id);
+    const novosTemas = [...itensComprados.temas, ...secretos];
+    setItensComprados(prev => ({ ...prev, temas: novosTemas }));
+    await set(ref(db, `usuarios/${authUser.uid}/itensComprados/temas`), novosTemas);
+    Alert.alert('Admin', 'Temas secretos desbloqueados!');
+  }
+
+  async function adminLimparDiaHoje() {
+    if (!casalId) return;
+    try {
+      if (historico[hoje]) {
+        await remove(ref(db, `casais/${casalId}/historico/${hoje}`));
+        Alert.alert('Admin', `Registro de ${hoje} removido.`);
+      } else {
+        Alert.alert('Admin', 'Nenhum registro hoje para remover.');
+      }
+    } catch(e) {
+      Alert.alert('Erro', 'Falha ao remover.');
+    }
   }
 
   // ── Função principal marcarTomou (completa) ───────────────────────────────────
@@ -933,7 +990,6 @@ export default function App() {
       const naJanela = estaDentroJanela('20:30', 10, agora);
       const quemSouEu = (perfil?.nome || '').toLowerCase().includes('harlley') ? 'harlley' : 'ana';
 
-      // --- Ponto para o casal ---
       const np = { ...pontos };
       if (naJanela) {
         np.ana = (np.ana || 0) + 1;
@@ -942,19 +998,16 @@ export default function App() {
       }
       await set(ref(db, `casais/${casalId}/pontos`), np);
 
-      // --- Histórico ---
       await set(ref(db, `casais/${casalId}/historico/${hoje}`), {
         data: hoje, hora, tomou: true, quemMarcou: authUser.uid,
       });
 
-      // --- Recompensas individuais (streak, antrix, pontos) ---
       const streakAtual = calcularStreakAtual();
       const { pontosGanhos, antrixGanho } = calcularRecompensa(streakAtual);
       const novoStreak = streakAtual + 1;
       const novoIndPontos = indPontos + pontosGanhos;
       const novoAntrix = antrix + antrixGanho;
 
-      // Atualiza no Firebase e local
       await update(ref(db, `usuarios/${authUser.uid}`), {
         indPontos: novoIndPontos,
         antrix: novoAntrix,
@@ -971,10 +1024,8 @@ export default function App() {
         diasSemErroHorario: naJanela ? prev.diasSemErroHorario + 1 : 0
       }));
 
-      // Verificar conquistas (após atualizações)
       await verificarTodasConquistas();
 
-      // --- Efeitos visuais ---
       const total = Object.keys(historico).length + 1;
       if (total % 28 === 0) { setConfete(true); setTimeout(() => setConfete(false), 3000); }
 
@@ -992,7 +1043,6 @@ export default function App() {
     }
   }
 
-  // ── Outras funções auxiliares ────────────────────────────────────────────────
   async function adminToggleDia(key) {
     if (!isAdmin) return;
     try {
@@ -1130,7 +1180,6 @@ export default function App() {
   const meuHorario = casalConfig?.horarioPessoal?.[authUser?.uid];
   const baixando   = otaProgress > 0 && otaProgress < 1;
 
-  // Mapeia conquistas para exibição
   const getConquistaNome = (id) => {
     for (const cat of Object.values(CONQUISTAS)) {
       const c = cat.find(c => c.id === id);
@@ -1145,7 +1194,7 @@ export default function App() {
   if (tela === 'splash') return (
     <View style={s.splash}>
       <Text style={s.splashEmoji}>💊</Text>
-      <Text style={s.splashTitle}>Pílula da Ana</Text>
+      <Text style={s.splashTitle}>Pílula da Ana - v6.0</Text>
       <ActivityIndicator color="#ff2d78" style={{ marginTop: 20 }} />
     </View>
   );
@@ -1153,7 +1202,7 @@ export default function App() {
   if (tela === 'auth') return (
     <ScrollView contentContainerStyle={s.authWrap} keyboardShouldPersistTaps="handled">
       <Text style={s.splashEmoji}>💊</Text>
-      <Text style={s.splashTitle}>Pílula da Ana</Text>
+      <Text style={s.splashTitle}>Pílula da Ana - v6.0</Text>
       <Text style={s.authSub}>{authMode === 'login' ? 'Entrar na conta' : 'Criar conta'}</Text>
       {authMode === 'cadastro' && (
         <TextInput style={s.input} placeholder="Seu nome" placeholderTextColor="#555"
@@ -1218,6 +1267,7 @@ export default function App() {
   return (
     <View style={s.root}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={false} />
+      <Text style={{ position: 'absolute', top: 5, right: 10, color: '#aaa', fontSize: 10, zIndex: 100 }}>v{VERSAO_ATUAL}</Text>
 
       {/* Modais (OTA, Amor, Admin, etc.) - mantidos */}
       <Modal transparent visible={modalOta} animationType="slide"
@@ -1290,6 +1340,25 @@ export default function App() {
               <Text style={s.adminBtnTxt}>▶️ Encerrar Pausa</Text>
             </TouchableOpacity>
           )}
+          {/* Botões novos */}
+          <TouchableOpacity style={s.adminBtn} onPress={gerarCodigoConvite}>
+            <Text style={s.adminBtnTxt}>🔑 Gerar código de convite</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.adminBtn} onPress={adminLimparDiaHoje}>
+            <Text style={s.adminBtnTxt}>🗑️ Remover registro de hoje</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[s.adminBtn, { borderColor: '#ffaa00' }]} onPress={adminSetAntrixInfinito}>
+            <Text style={[s.adminBtnTxt, { color: '#ffaa00' }]}>💰 Antrix infinito (999999)</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[s.adminBtn, { borderColor: '#44ff44' }]} onPress={adminDesbloquearTodasConquistas}>
+            <Text style={[s.adminBtnTxt, { color: '#44ff44' }]}>🏆 Desbloquear todas conquistas</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[s.adminBtn, { borderColor: '#44ff44' }]} onPress={adminDesbloquearTodosItens}>
+            <Text style={[s.adminBtnTxt, { color: '#44ff44' }]}>🎨 Desbloquear todos itens (temas+selos)</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[s.adminBtn, { borderColor: '#ff66cc' }]} onPress={adminDesbloquearTemasSecretos}>
+            <Text style={[s.adminBtnTxt, { color: '#ff66cc' }]}>✨ Desbloquear temas secretos</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={s.btnSecondary} onPress={() => setModalAdmin(false)}>
             <Text style={s.btnSecondaryTxt}>Fechar</Text>
           </TouchableOpacity>
@@ -1742,7 +1811,7 @@ export default function App() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// STYLES (adicionados novos estilos)
+// STYLES
 // ══════════════════════════════════════════════════════════════════════════════
 const makeStyles = (tema) => StyleSheet.create({
   root:           { flex: 1, backgroundColor: tema.bg },
@@ -1809,7 +1878,6 @@ const makeStyles = (tema) => StyleSheet.create({
   progressBar:    { height: '100%', backgroundColor: tema.primary, borderRadius: 4 },
   progressTxt:    { color: tema.sub, fontSize: 12, textAlign: 'center', marginTop: 4 },
 
-  // NOVOS ESTILOS
   statsRow:       { flexDirection: 'row', justifyContent: 'space-around', width: '100%', marginVertical: 15 },
   statItem:       { alignItems: 'center' },
   statValue:      { fontSize: 24, fontWeight: 'bold', color: tema.primary },
