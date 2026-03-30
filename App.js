@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView,
   Alert, TextInput, Modal, Animated, Image,
-  ActivityIndicator, Dimensions, PanResponder, StatusBar
+  ActivityIndicator, Dimensions, PanResponder, StatusBar, FlatList
 } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
@@ -10,7 +10,7 @@ import * as IntentLauncher from 'expo-intent-launcher';
 import * as ImagePicker from 'expo-image-picker';
 import { initializeApp } from 'firebase/app';
 import {
-  getDatabase, ref, set, get, onValue, push, remove, off, update
+  getDatabase, ref, set, get, onValue, push, remove, off, update, query, orderByChild, limitToLast
 } from 'firebase/database';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
   signOut, onAuthStateChanged, updateProfile
@@ -51,7 +51,7 @@ const TEMAS_BASE = {
   verde:  { primary:'#00ff87', bg:'#000a05', card:'#001510', border:'#003020', accent:'#00cc66', text:'#fff', sub:'#44cc88' },
 };
 
-// ─── LOJA: Itens completos (temas e selos) ─────────────────────────────────────
+// ─── LOJA: Itens completos (temas, selos, molduras) ──────────────────────────────
 const ITENS_LOJA = {
   temas: {
     comum: [
@@ -140,92 +140,144 @@ const ITENS_LOJA = {
       { id: 'assinatura_ana', nome: 'Emoji assinatura Ana', preco: 300, emoji: '👩‍❤️‍👨' },
       { id: 'assinatura_harlley', nome: 'Emoji assinatura Harlley', preco: 300, emoji: '💘' }
     ]
+  },
+  molduras: {
+    comum: [
+      { id: 'moldura_simples', nome: 'Moldura Simples', preco: 20, cor: '#ffffff', estilo: 'solid' },
+      { id: 'moldura_rosa', nome: 'Moldura Rosa', preco: 20, cor: '#ff69b4', estilo: 'solid' },
+      { id: 'moldura_azul', nome: 'Moldura Azul', preco: 20, cor: '#3498db', estilo: 'solid' },
+      { id: 'moldura_roxo', nome: 'Moldura Roxo', preco: 20, cor: '#9b59b6', estilo: 'solid' },
+      { id: 'moldura_verde', nome: 'Moldura Verde', preco: 20, cor: '#2ecc71', estilo: 'solid' },
+      { id: 'moldura_amarela', nome: 'Moldura Amarela', preco: 20, cor: '#f1c40f', estilo: 'solid' },
+      { id: 'moldura_laranja', nome: 'Moldura Laranja', preco: 20, cor: '#f39c12', estilo: 'solid' },
+      { id: 'moldura_preta', nome: 'Moldura Preta', preco: 20, cor: '#000000', estilo: 'solid' },
+      { id: 'moldura_branca', nome: 'Moldura Branca', preco: 20, cor: '#ffffff', estilo: 'solid' },
+      { id: 'moldura_cinza', nome: 'Moldura Cinza', preco: 20, cor: '#95a5a6', estilo: 'solid' }
+    ],
+    raro: [
+      { id: 'moldura_dourada', nome: 'Moldura Dourada', preco: 80, cor: '#ffd700', estilo: 'solid' },
+      { id: 'moldura_prateada', nome: 'Moldura Prateada', preco: 80, cor: '#c0c0c0', estilo: 'solid' },
+      { id: 'moldura_brilho', nome: 'Moldura Brilho', preco: 80, cor: '#ffaa44', estilo: 'solid' },
+      { id: 'moldura_floral', nome: 'Moldura Floral', preco: 80, cor: '#ff99cc', estilo: 'solid' },
+      { id: 'moldura_estrelas', nome: 'Moldura Estrelas', preco: 80, cor: '#fff000', estilo: 'solid' },
+      { id: 'moldura_coracao', nome: 'Moldura Coração', preco: 80, cor: '#ff2d78', estilo: 'solid' },
+      { id: 'moldura_geometrica', nome: 'Moldura Geométrica', preco: 80, cor: '#44ff44', estilo: 'solid' },
+      { id: 'moldura_arcoiris', nome: 'Moldura Arco-íris', preco: 80, cor: 'rainbow', estilo: 'gradient' },
+      { id: 'moldura_glitch', nome: 'Moldura Glitch', preco: 80, cor: '#ff00ff', estilo: 'solid' },
+      { id: 'moldura_neon', nome: 'Moldura Neon', preco: 80, cor: '#00ffcc', estilo: 'solid' }
+    ],
+    lendario: [
+      { id: 'moldura_galaxia', nome: 'Moldura Galáxia', preco: 300, cor: '#aa88ff', estilo: 'solid' },
+      { id: 'moldura_amor_eterno', nome: 'Moldura Amor Eterno', preco: 300, cor: '#ff66cc', estilo: 'solid' },
+      { id: 'moldura_casamento', nome: 'Moldura Casamento', preco: 300, cor: '#fff0f0', estilo: 'solid' },
+      { id: 'moldura_rainbow', nome: 'Moldura Rainbow', preco: 300, cor: 'rainbow', estilo: 'gradient' },
+      { id: 'moldura_diamante', nome: 'Moldura Diamante', preco: 300, cor: '#b9f2ff', estilo: 'solid' },
+      { id: 'moldura_sonho', nome: 'Moldura Sonho', preco: 300, cor: '#cbaacb', estilo: 'solid' },
+      { id: 'moldura_lua', nome: 'Moldura Lua', preco: 300, cor: '#f5e6d3', estilo: 'solid' },
+      { id: 'moldura_sol', nome: 'Moldura Sol', preco: 300, cor: '#ffaa44', estilo: 'solid' },
+      { id: 'moldura_estrela_cadente', nome: 'Moldura Estrela Cadente', preco: 300, cor: '#ffcc88', estilo: 'solid' },
+      { id: 'moldura_criador', nome: 'Moldura Criador', preco: 300, cor: '#ff2d78', estilo: 'solid' }
+    ],
+    secreto: [
+      { id: 'moldura_anjo_rosa', nome: 'Moldura Anjo Rosa', preco: 0, cor: '#ffb7c5', estilo: 'solid', animado: true },
+      { id: 'moldura_rainha_jogo', nome: 'Moldura Rainha do Jogo', preco: 0, cor: '#ffd966', estilo: 'solid', animado: true },
+      { id: 'moldura_lenda_absoluta', nome: 'Moldura Lenda Absoluta', preco: 0, cor: '#ffaa44', estilo: 'gradient', animado: true }
+    ]
   }
 };
 
-// ─── CONQUISTAS ────────────────────────────────────────────────────────────────
+// ─── CONQUISTAS (com títulos) ──────────────────────────────────────────────────
 const CONQUISTAS = {
   streak: [
-    { id: 'streak3', nome: '3 dias seguidos', cond: (s) => s.streak >= 3, recompensa: { antrix: 20 } },
-    { id: 'streak5', nome: '5 dias seguidos', cond: (s) => s.streak >= 5, recompensa: { antrix: 20 } },
-    { id: 'streak7', nome: '7 dias seguidos', cond: (s) => s.streak >= 7, recompensa: { antrix: 50 } },
-    { id: 'streak10', nome: '10 dias seguidos', cond: (s) => s.streak >= 10, recompensa: { antrix: 50 } },
-    { id: 'streak15', nome: '15 dias seguidos', cond: (s) => s.streak >= 15, recompensa: { antrix: 100 } },
-    { id: 'streak20', nome: '20 dias seguidos', cond: (s) => s.streak >= 20, recompensa: { antrix: 100 } },
-    { id: 'streak30', nome: '30 dias seguidos', cond: (s) => s.streak >= 30, recompensa: { antrix: 200 } },
-    { id: 'streak45', nome: '45 dias seguidos', cond: (s) => s.streak >= 45, recompensa: { antrix: 200 } },
-    { id: 'streak60', nome: '60 dias seguidos', cond: (s) => s.streak >= 60, recompensa: { antrix: 300 } },
-    { id: 'streak90', nome: '90 dias seguidos', cond: (s) => s.streak >= 90, recompensa: { antrix: 400 } },
-    { id: 'streak120', nome: '120 dias seguidos', cond: (s) => s.streak >= 120, recompensa: { antrix: 500 } },
-    { id: 'streak180', nome: '180 dias seguidos', cond: (s) => s.streak >= 180, recompensa: { antrix: 700 } },
-    { id: 'streak365', nome: '365 dias seguidos', cond: (s) => s.streak >= 365, recompensa: { antrix: 1000 } }
+    { id: 'streak3', nome: '3 dias seguidos', titulo: 'Iniciante', corTitulo: '#aaa', cond: (s) => s.streak >= 3, recompensa: { antrix: 20 } },
+    { id: 'streak5', nome: '5 dias seguidos', titulo: 'Persistente', corTitulo: '#ccc', cond: (s) => s.streak >= 5, recompensa: { antrix: 20 } },
+    { id: 'streak7', nome: '7 dias seguidos', titulo: 'Disciplinado', corTitulo: '#ffaa66', cond: (s) => s.streak >= 7, recompensa: { antrix: 50 } },
+    { id: 'streak10', nome: '10 dias seguidos', titulo: 'Dedicado', corTitulo: '#ffaa66', cond: (s) => s.streak >= 10, recompensa: { antrix: 50 } },
+    { id: 'streak15', nome: '15 dias seguidos', titulo: 'Comprometido', corTitulo: '#ffaa66', cond: (s) => s.streak >= 15, recompensa: { antrix: 100 } },
+    { id: 'streak20', nome: '20 dias seguidos', titulo: 'Inabalável', corTitulo: '#ffaa66', cond: (s) => s.streak >= 20, recompensa: { antrix: 100 } },
+    { id: 'streak30', nome: '30 dias seguidos', titulo: 'Herói da Rotina', corTitulo: '#ffaa66', cond: (s) => s.streak >= 30, recompensa: { antrix: 200 } },
+    { id: 'streak45', nome: '45 dias seguidos', titulo: 'Guardião', corTitulo: '#ffaa66', cond: (s) => s.streak >= 45, recompensa: { antrix: 200 } },
+    { id: 'streak60', nome: '60 dias seguidos', titulo: 'Mestre do Tempo', corTitulo: '#ffaa66', cond: (s) => s.streak >= 60, recompensa: { antrix: 300 } },
+    { id: 'streak90', nome: '90 dias seguidos', titulo: 'Lenda Viva', corTitulo: '#ffaa66', cond: (s) => s.streak >= 90, recompensa: { antrix: 400 } },
+    { id: 'streak120', nome: '120 dias seguidos', titulo: 'Imortal', corTitulo: '#ffaa66', cond: (s) => s.streak >= 120, recompensa: { antrix: 500 } },
+    { id: 'streak180', nome: '180 dias seguidos', titulo: 'Semideus', corTitulo: '#ffaa66', cond: (s) => s.streak >= 180, recompensa: { antrix: 700 } },
+    { id: 'streak365', nome: '365 dias seguidos', titulo: 'Deus da Consistência', corTitulo: '#ffaa66', cond: (s) => s.streak >= 365, recompensa: { antrix: 1000 } }
   ],
   ranking: [
-    { id: 'rank1_1', nome: 'Ficar em 1º lugar 1 vez', cond: (s) => s.rankPrimeiro >= 1, recompensa: { antrix: 40 } },
-    { id: 'rank1_3', nome: 'Ficar em 1º lugar 3 vezes', cond: (s) => s.rankPrimeiro >= 3, recompensa: { antrix: 40 } },
-    { id: 'rank1_5', nome: 'Ficar em 1º lugar 5 vezes', cond: (s) => s.rankPrimeiro >= 5, recompensa: { antrix: 60 } },
-    { id: 'rank1_10', nome: 'Ficar em 1º lugar 10 vezes', cond: (s) => s.rankPrimeiro >= 10, recompensa: { antrix: 100 } },
-    { id: 'rank1_20', nome: 'Ficar em 1º lugar 20 vezes', cond: (s) => s.rankPrimeiro >= 20, recompensa: { antrix: 150 } },
-    { id: 'rank1_30', nome: 'Ficar em 1º lugar 30 vezes', cond: (s) => s.rankPrimeiro >= 30, recompensa: { antrix: 200 } },
-    { id: 'rank1_50', nome: 'Ficar em 1º lugar 50 vezes', cond: (s) => s.rankPrimeiro >= 50, recompensa: { antrix: 300 } }
+    { id: 'rank1_1', nome: 'Ficar em 1º lugar 1 vez', titulo: 'Campeão', corTitulo: '#ffaa44', cond: (s) => s.rankPrimeiro >= 1, recompensa: { antrix: 40 } },
+    { id: 'rank1_3', nome: 'Ficar em 1º lugar 3 vezes', titulo: 'Tricampeão', corTitulo: '#ffaa44', cond: (s) => s.rankPrimeiro >= 3, recompensa: { antrix: 40 } },
+    { id: 'rank1_5', nome: 'Ficar em 1º lugar 5 vezes', titulo: 'Pentacampeão', corTitulo: '#ffaa44', cond: (s) => s.rankPrimeiro >= 5, recompensa: { antrix: 60 } },
+    { id: 'rank1_10', nome: 'Ficar em 1º lugar 10 vezes', titulo: 'Lenda do Ranking', corTitulo: '#ffaa44', cond: (s) => s.rankPrimeiro >= 10, recompensa: { antrix: 100 } },
+    { id: 'rank1_20', nome: 'Ficar em 1º lugar 20 vezes', titulo: 'Invencível', corTitulo: '#ffaa44', cond: (s) => s.rankPrimeiro >= 20, recompensa: { antrix: 150 } },
+    { id: 'rank1_30', nome: 'Ficar em 1º lugar 30 vezes', titulo: 'Imperador', corTitulo: '#ffaa44', cond: (s) => s.rankPrimeiro >= 30, recompensa: { antrix: 200 } },
+    { id: 'rank1_50', nome: 'Ficar em 1º lugar 50 vezes', titulo: 'Rei do App', corTitulo: '#ffaa44', cond: (s) => s.rankPrimeiro >= 50, recompensa: { antrix: 300 } }
   ],
   antrix: [
-    { id: 'antrix100', nome: 'Juntar 100 Antrix', cond: (s) => s.antrixTotal >= 100, recompensa: { antrix: 0 } },
-    { id: 'antrix250', nome: 'Juntar 250 Antrix', cond: (s) => s.antrixTotal >= 250, recompensa: { antrix: 0 } },
-    { id: 'antrix500', nome: 'Juntar 500 Antrix', cond: (s) => s.antrixTotal >= 500, recompensa: { antrix: 0 } },
-    { id: 'antrix750', nome: 'Juntar 750 Antrix', cond: (s) => s.antrixTotal >= 750, recompensa: { antrix: 0 } },
-    { id: 'antrix1000', nome: 'Juntar 1000 Antrix', cond: (s) => s.antrixTotal >= 1000, recompensa: { antrix: 0 } },
-    { id: 'antrix1500', nome: 'Juntar 1500 Antrix', cond: (s) => s.antrixTotal >= 1500, recompensa: { antrix: 0 } },
-    { id: 'antrix2000', nome: 'Juntar 2000 Antrix', cond: (s) => s.antrixTotal >= 2000, recompensa: { antrix: 0 } }
+    { id: 'antrix100', nome: 'Juntar 100 Antrix', titulo: 'Colecionador', corTitulo: '#aaa', cond: (s) => s.antrixTotal >= 100, recompensa: { antrix: 0 } },
+    { id: 'antrix250', nome: 'Juntar 250 Antrix', titulo: 'Acumulador', corTitulo: '#aaa', cond: (s) => s.antrixTotal >= 250, recompensa: { antrix: 0 } },
+    { id: 'antrix500', nome: 'Juntar 500 Antrix', titulo: 'Tesoureiro', corTitulo: '#aaa', cond: (s) => s.antrixTotal >= 500, recompensa: { antrix: 0 } },
+    { id: 'antrix750', nome: 'Juntar 750 Antrix', titulo: 'Magnata', corTitulo: '#aaa', cond: (s) => s.antrixTotal >= 750, recompensa: { antrix: 0 } },
+    { id: 'antrix1000', nome: 'Juntar 1000 Antrix', titulo: 'Barão', corTitulo: '#aaa', cond: (s) => s.antrixTotal >= 1000, recompensa: { antrix: 0 } },
+    { id: 'antrix1500', nome: 'Juntar 1500 Antrix', titulo: 'Conde', corTitulo: '#aaa', cond: (s) => s.antrixTotal >= 1500, recompensa: { antrix: 0 } },
+    { id: 'antrix2000', nome: 'Juntar 2000 Antrix', titulo: 'Príncipe', corTitulo: '#aaa', cond: (s) => s.antrixTotal >= 2000, recompensa: { antrix: 0 } }
   ],
   compras: [
-    { id: 'comprar1tema', nome: 'Comprar 1 tema', cond: (s) => s.totalTemasComprados >= 1, recompensa: { antrix: 30 } },
-    { id: 'comprar3temas', nome: 'Comprar 3 temas', cond: (s) => s.totalTemasComprados >= 3, recompensa: { antrix: 30 } },
-    { id: 'comprar5temas', nome: 'Comprar 5 temas', cond: (s) => s.totalTemasComprados >= 5, recompensa: { antrix: 50 } },
-    { id: 'comprar10temas', nome: 'Comprar 10 temas', cond: (s) => s.totalTemasComprados >= 10, recompensa: { antrix: 80 } },
-    { id: 'comprar1temararo', nome: 'Comprar 1 tema raro', cond: (s) => s.totalTemasRarosComprados >= 1, recompensa: { antrix: 50 } },
-    { id: 'comprar3temasraros', nome: 'Comprar 3 temas raros', cond: (s) => s.totalTemasRarosComprados >= 3, recompensa: { antrix: 100 } },
-    { id: 'comprar1temalendario', nome: 'Comprar 1 tema lendário', cond: (s) => s.totalTemasLendariosComprados >= 1, recompensa: { antrix: 150 } },
-    { id: 'comprar3temaslendarios', nome: 'Comprar 3 temas lendários', cond: (s) => s.totalTemasLendariosComprados >= 3, recompensa: { antrix: 300 } }
+    { id: 'comprar1tema', nome: 'Comprar 1 tema', titulo: 'Estiloso', corTitulo: '#aaa', cond: (s) => s.totalTemasComprados >= 1, recompensa: { antrix: 30 } },
+    { id: 'comprar3temas', nome: 'Comprar 3 temas', titulo: 'Colecionador de Estilos', corTitulo: '#aaa', cond: (s) => s.totalTemasComprados >= 3, recompensa: { antrix: 30 } },
+    { id: 'comprar5temas', nome: 'Comprar 5 temas', titulo: 'Fashionista', corTitulo: '#aaa', cond: (s) => s.totalTemasComprados >= 5, recompensa: { antrix: 50 } },
+    { id: 'comprar10temas', nome: 'Comprar 10 temas', titulo: 'Guardião da Moda', corTitulo: '#aaa', cond: (s) => s.totalTemasComprados >= 10, recompensa: { antrix: 80 } },
+    { id: 'comprar1temararo', nome: 'Comprar 1 tema raro', titulo: 'Raridade', corTitulo: '#aaa', cond: (s) => s.totalTemasRarosComprados >= 1, recompensa: { antrix: 50 } },
+    { id: 'comprar3temasraros', nome: 'Comprar 3 temas raros', titulo: 'Caçador de Raros', corTitulo: '#aaa', cond: (s) => s.totalTemasRarosComprados >= 3, recompensa: { antrix: 100 } },
+    { id: 'comprar1temalendario', nome: 'Comprar 1 tema lendário', titulo: 'Lendário', corTitulo: '#ffaa44', cond: (s) => s.totalTemasLendariosComprados >= 1, recompensa: { antrix: 150 } },
+    { id: 'comprar3temaslendarios', nome: 'Comprar 3 temas lendários', titulo: 'Mito Vivo', corTitulo: '#ffaa44', cond: (s) => s.totalTemasLendariosComprados >= 3, recompensa: { antrix: 300 } }
   ],
   app: [
-    { id: 'criar_conta', nome: 'Criar conta', cond: () => true, recompensa: { antrix: 10 } },
-    { id: 'login3dias', nome: 'Fazer login 3 dias seguidos', cond: (s) => s.loginStreak >= 3, recompensa: { antrix: 20 } },
-    { id: 'login7dias', nome: 'Fazer login 7 dias seguidos', cond: (s) => s.loginStreak >= 7, recompensa: { antrix: 40 } },
-    { id: 'login15dias', nome: 'Fazer login 15 dias seguidos', cond: (s) => s.loginStreak >= 15, recompensa: { antrix: 80 } },
-    { id: 'perfeito5', nome: 'Tomar no horário perfeito 5 vezes', cond: (s) => s.tomadasHorarioPerfeito >= 5, recompensa: { antrix: 50 } },
-    { id: 'perfeito10', nome: 'Tomar no horário perfeito 10 vezes', cond: (s) => s.tomadasHorarioPerfeito >= 10, recompensa: { antrix: 100 } },
-    { id: 'perfeito30', nome: 'Tomar no horário perfeito 30 vezes', cond: (s) => s.tomadasHorarioPerfeito >= 30, recompensa: { antrix: 200 } },
-    { id: 'perfeito100', nome: 'Tomar no horário perfeito 100 vezes', cond: (s) => s.tomadasHorarioPerfeito >= 100, recompensa: { antrix: 500 } },
-    { id: 'usar3temas', nome: 'Usar 3 temas diferentes', cond: (s) => s.temasDiferentesUsados >= 3, recompensa: { antrix: 30 } },
-    { id: 'usar5temas', nome: 'Usar 5 temas diferentes', cond: (s) => s.temasDiferentesUsados >= 5, recompensa: { antrix: 50 } }
+    { id: 'criar_conta', nome: 'Criar conta', titulo: 'Bem-vindo', corTitulo: '#aaa', cond: () => true, recompensa: { antrix: 10 } },
+    { id: 'login3dias', nome: 'Fazer login 3 dias seguidos', titulo: 'Assíduo', corTitulo: '#aaa', cond: (s) => s.loginStreak >= 3, recompensa: { antrix: 20 } },
+    { id: 'login7dias', nome: 'Fazer login 7 dias seguidos', titulo: 'Fiel', corTitulo: '#aaa', cond: (s) => s.loginStreak >= 7, recompensa: { antrix: 40 } },
+    { id: 'login15dias', nome: 'Fazer login 15 dias seguidos', titulo: 'Leal', corTitulo: '#aaa', cond: (s) => s.loginStreak >= 15, recompensa: { antrix: 80 } },
+    { id: 'perfeito5', nome: 'Tomar no horário perfeito 5 vezes', titulo: 'Pontual', corTitulo: '#aaa', cond: (s) => s.tomadasHorarioPerfeito >= 5, recompensa: { antrix: 50 } },
+    { id: 'perfeito10', nome: 'Tomar no horário perfeito 10 vezes', titulo: 'Cronômetro', corTitulo: '#aaa', cond: (s) => s.tomadasHorarioPerfeito >= 10, recompensa: { antrix: 100 } },
+    { id: 'perfeito30', nome: 'Tomar no horário perfeito 30 vezes', titulo: 'Mestre do Tempo', corTitulo: '#aaa', cond: (s) => s.tomadasHorarioPerfeito >= 30, recompensa: { antrix: 200 } },
+    { id: 'perfeito100', nome: 'Tomar no horário perfeito 100 vezes', titulo: 'Senhor do Relógio', corTitulo: '#aaa', cond: (s) => s.tomadasHorarioPerfeito >= 100, recompensa: { antrix: 500 } },
+    { id: 'usar3temas', nome: 'Usar 3 temas diferentes', titulo: 'Versátil', corTitulo: '#aaa', cond: (s) => s.temasDiferentesUsados >= 3, recompensa: { antrix: 30 } },
+    { id: 'usar5temas', nome: 'Usar 5 temas diferentes', titulo: 'Caleidoscópio', corTitulo: '#aaa', cond: (s) => s.temasDiferentesUsados >= 5, recompensa: { antrix: 50 } }
   ],
   secretas: [
-    { id: '10_ranking_seguido', nomeSecreto: '???', nomeRevelado: 'Ganhar 10 vezes seguidas no ranking', cond: (s) => s.rankPrimeiroConsecutivo >= 10, recompensa: { tema: 'tema_favorita' } },
-    { id: '30dias_sem_erro', nomeSecreto: '???', nomeRevelado: 'Ficar 30 dias seguidos sem errar horário', cond: (s) => s.diasSemErroHorario >= 30, recompensa: { tema: 'tema_anjo_rosa' } },
-    { id: '2000_antrix_sem_gastar', nomeSecreto: '???', nomeRevelado: 'Juntar 2000 Antrix sem gastar', cond: (s) => s.antrixSemGastar >= 2000, recompensa: { tema: 'tema_rainha_jogo' } },
-    { id: '10_temas_lendarios', nomeSecreto: '???', nomeRevelado: 'Comprar 10 temas lendários', cond: (s) => s.totalTemasLendariosComprados >= 10, recompensa: { tema: 'tema_criadora_amor' } },
-    { id: '365_dias_streak', nomeSecreto: '???', nomeRevelado: 'Chegar em 365 dias seguidos', cond: (s) => s.streak >= 365, recompensa: { tema: 'tema_lenda_absoluta' } }
+    { id: '10_ranking_seguido', nomeSecreto: '???', nomeRevelado: 'Ganhar 10 vezes seguidas no ranking', tituloSecreto: 'Invencível', corTitulo: '#ffaa44', cond: (s) => s.rankPrimeiroConsecutivo >= 10, recompensa: { tema: 'tema_favorita', moldura: 'moldura_anjo_rosa' } },
+    { id: '30dias_sem_erro', nomeSecreto: '???', nomeRevelado: 'Ficar 30 dias seguidos sem errar horário', tituloSecreto: 'Anjo Pontual', corTitulo: '#ffb7c5', cond: (s) => s.diasSemErroHorario >= 30, recompensa: { tema: 'tema_anjo_rosa', moldura: 'moldura_rainha_jogo' } },
+    { id: '2000_antrix_sem_gastar', nomeSecreto: '???', nomeRevelado: 'Juntar 2000 Antrix sem gastar', tituloSecreto: 'Acumulador Lendário', corTitulo: '#ffaa44', cond: (s) => s.antrixSemGastar >= 2000, recompensa: { tema: 'tema_rainha_jogo', moldura: 'moldura_lenda_absoluta' } },
+    { id: '10_temas_lendarios', nomeSecreto: '???', nomeRevelado: 'Comprar 10 temas lendários', tituloSecreto: 'Colecionador Lendário', corTitulo: '#ffaa44', cond: (s) => s.totalTemasLendariosComprados >= 10, recompensa: { tema: 'tema_criadora_amor', moldura: 'moldura_galaxia' } },
+    { id: '365_dias_streak', nomeSecreto: '???', nomeRevelado: 'Chegar em 365 dias seguidos', tituloSecreto: 'Lenda Absoluta', corTitulo: '#ffaa44', cond: (s) => s.streak >= 365, recompensa: { tema: 'tema_lenda_absoluta', moldura: 'moldura_estrela_cadente' } }
   ]
 };
 
-// Mapeamento de temas especiais recompensas
-const RECOMPENSAS_TEMAS = {
+// Mapeamento de recompensas especiais
+const RECOMPENSAS_ESPECIAIS = {
   tema_favorita: { id: 'tema_favorita', nome: 'Tema A Favorita', cor: '#ff66cc' },
   tema_anjo_rosa: { id: 'tema_anjo_rosa', nome: 'Tema Anjo Rosa', cor: '#ffb7c5' },
   tema_rainha_jogo: { id: 'tema_rainha_jogo', nome: 'Tema Rainha do Jogo', cor: '#ffd966' },
   tema_criadora_amor: { id: 'tema_criadora_amor', nome: 'Tema Criadora do Amor', cor: '#ff99ff' },
-  tema_lenda_absoluta: { id: 'tema_lenda_absoluta', nome: 'Tema Lenda Absoluta', cor: '#ffaa44' }
+  tema_lenda_absoluta: { id: 'tema_lenda_absoluta', nome: 'Tema Lenda Absoluta', cor: '#ffaa44' },
+  moldura_anjo_rosa: { id: 'moldura_anjo_rosa', nome: 'Moldura Anjo Rosa', preco: 0, cor: '#ffb7c5', estilo: 'solid', animado: true },
+  moldura_rainha_jogo: { id: 'moldura_rainha_jogo', nome: 'Moldura Rainha do Jogo', preco: 0, cor: '#ffd966', estilo: 'solid', animado: true },
+  moldura_lenda_absoluta: { id: 'moldura_lenda_absoluta', nome: 'Moldura Lenda Absoluta', preco: 0, cor: '#ffaa44', estilo: 'gradient', animado: true },
+  moldura_galaxia: { id: 'moldura_galaxia', nome: 'Moldura Galáxia', preco: 0, cor: '#aa88ff', estilo: 'solid' },
+  moldura_estrela_cadente: { id: 'moldura_estrela_cadente', nome: 'Moldura Estrela Cadente', preco: 0, cor: '#ffcc88', estilo: 'solid' }
 };
 
-// Helper para buscar tema por id
-const getTemaById = (id) => {
-  for (let cat of Object.values(ITENS_LOJA.temas)) {
-    const found = cat.find(t => t.id === id);
+// Helper para buscar item por id
+const getItemById = (tipo, id) => {
+  for (let cat of Object.values(ITENS_LOJA[tipo])) {
+    const found = cat.find(i => i.id === id);
     if (found) return found;
   }
   return null;
 };
+
+const getTemaById = (id) => getItemById('temas', id);
+const getSeloById = (id) => getItemById('selos', id);
+const getMolduraById = (id) => getItemById('molduras', id) || RECOMPENSAS_ESPECIAIS[id];
 
 // ─── Date Helpers ─────────────────────────────────────────────────────────────
 const dateToKey = d => d.toISOString().slice(0, 10);
@@ -266,7 +318,7 @@ Notifications.setNotificationHandler({
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// CONSISTENCY CIRCLE
+// CONSISTENCY CIRCLE (mesmo código original)
 // ══════════════════════════════════════════════════════════════════════════════
 function ConsistencyCircle({ historico, dataInicio, tema }) {
   const TOTAL  = 28;
@@ -369,11 +421,12 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [authErro, setAuthErro]       = useState('');
 
-  // ── Pair ────────────────────────────────────────────────────────────────────
+  // ── Pair / Conectar ─────────────────────────────────────────────────────────
   const [pairStep, setPairStep]       = useState('menu');
   const [pairChave, setPairChave]     = useState('');
   const [pairInput, setPairInput]     = useState('');
   const [pairLoading, setPairLoading] = useState(false);
+  const [codigoGerado, setCodigoGerado] = useState('');
 
   // ── App data ────────────────────────────────────────────────────────────────
   const [historico, setHistorico]     = useState({});
@@ -388,12 +441,15 @@ export default function App() {
   const [adminUsers, setAdminUsers]   = useState([]);
   const [casalConfig, setCasalConfig] = useState({});
 
-  // ── Novos estados (Loja, Conquistas) ────────────────────────────────────────
+  // ── Novos estados (Loja, Conquistas, Molduras, Títulos, Mural) ───────────────
   const [antrix, setAntrix]           = useState(0);
   const [indPontos, setIndPontos]     = useState(0);
   const [streak, setStreak]           = useState(0);
-  const [itensComprados, setItensComprados] = useState({ temas: [], selos: [] });
+  const [itensComprados, setItensComprados] = useState({ temas: [], selos: [], molduras: [] });
   const [seloEquipado, setSeloEquipado] = useState(null);
+  const [molduraEquipada, setMolduraEquipada] = useState(null);
+  const [titulosDesbloqueados, setTitulosDesbloqueados] = useState({}); // id -> { titulo, cor, animado }
+  const [tituloEquipado, setTituloEquipado] = useState(null);
   const [conquistasDesbloqueadas, setConquistasDesbloqueadas] = useState({});
   const [estatisticas, setEstatisticas] = useState({
     rankPrimeiro: 0,
@@ -403,17 +459,22 @@ export default function App() {
     totalTemasRarosComprados: 0,
     totalTemasLendariosComprados: 0,
     totalSelosComprados: 0,
+    totalMoldurasCompradas: 0,
     tomadasHorarioPerfeito: 0,
     temasDiferentesUsados: new Set(),
     loginStreak: 0,
     diasSemErroHorario: 0,
     antrixSemGastar: 0,
   });
+  const [mensagensMural, setMensagensMural] = useState([]);
+  const [novaMensagem, setNovaMensagem] = useState('');
   const [modalLoja, setModalLoja]     = useState(false);
   const [modalRanking, setModalRanking] = useState(false);
   const [globalRanking, setGlobalRanking] = useState([]);
   const [loadingRanking, setLoadingRanking] = useState(false);
   const [modalSelo, setModalSelo] = useState(false);
+  const [modalMoldura, setModalMoldura] = useState(false);
+  const [modalTitulo, setModalTitulo] = useState(false);
 
   // ── OTA ─────────────────────────────────────────────────────────────────────
   const [otaInfo, setOtaInfo]         = useState(null);
@@ -438,9 +499,10 @@ export default function App() {
   const fadeAmor = useRef(new Animated.Value(0)).current;
   const pulseBtn = useRef(new Animated.Value(1)).current;
   const [confete, setConfete] = useState(false);
+  const tituloAnim = useRef(new Animated.Value(0)).current;
 
-  // Abas (agora com 7)
-  const ABAS = ['home', 'calendario', 'ranking', 'loja', 'conquistas', 'sugestoes', 'perfil'];
+  // Abas (agora com 9)
+  const ABAS = ['home', 'calendario', 'ranking', 'loja', 'conquistas', 'mural', 'conectar', 'sugestoes', 'perfil'];
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
@@ -508,12 +570,16 @@ export default function App() {
   function resetEstado() {
     setHistorico({}); setPausa(null); setPontos({ ana: 0, harlley: 0 });
     setDataInicio(null); setFotos({}); setCasalId(null); setPerfil(null); setCasalConfig({});
-    setAntrix(0); setIndPontos(0); setStreak(0); setItensComprados({ temas: [], selos: [] });
-    setSeloEquipado(null); setConquistasDesbloqueadas({});
+    setAntrix(0); setIndPontos(0); setStreak(0);
+    setItensComprados({ temas: [], selos: [], molduras: [] });
+    setSeloEquipado(null); setMolduraEquipada(null);
+    setTitulosDesbloqueados({}); setTituloEquipado(null);
+    setConquistasDesbloqueadas({});
     setEstatisticas({
       rankPrimeiro: 0, rankPrimeiroConsecutivo: 0, antrixTotal: 0,
       totalTemasComprados: 0, totalTemasRarosComprados: 0, totalTemasLendariosComprados: 0,
-      totalSelosComprados: 0, tomadasHorarioPerfeito: 0, temasDiferentesUsados: new Set(),
+      totalSelosComprados: 0, totalMoldurasCompradas: 0,
+      tomadasHorarioPerfeito: 0, temasDiferentesUsados: new Set(),
       loginStreak: 0, diasSemErroHorario: 0, antrixSemGastar: 0
     });
   }
@@ -527,8 +593,11 @@ export default function App() {
       setAntrix(p.antrix || 0);
       setIndPontos(p.indPontos || 0);
       setStreak(p.streak || 0);
-      setItensComprados(p.itensComprados || { temas: [], selos: [] });
+      setItensComprados(p.itensComprados || { temas: [], selos: [], molduras: [] });
       setSeloEquipado(p.seloEquipado || null);
+      setMolduraEquipada(p.molduraEquipada || null);
+      setTitulosDesbloqueados(p.titulosDesbloqueados || {});
+      setTituloEquipado(p.tituloEquipado || null);
       setConquistasDesbloqueadas(p.conquistas || {});
       if (p.estatisticas) {
         setEstatisticas({
@@ -542,10 +611,26 @@ export default function App() {
         setTela('app');
         const tSnap = await get(ref(db, `casais/${p.casalId}/tema`));
         if (tSnap.exists()) aplicarTema(tSnap.val());
+        // Carregar mural
+        carregarMural(p.casalId);
       } else {
         setTela('pair');
       }
     } catch(e) { setTela('auth'); }
+  }
+
+  async function carregarMural(cid) {
+    const muralRef = ref(db, `casais/${cid}/mural`);
+    const q = query(muralRef, orderByChild('timestamp'), limitToLast(50));
+    onValue(q, (snap) => {
+      const msgs = [];
+      snap.forEach(child => {
+        msgs.push({ id: child.key, ...child.val() });
+      });
+      const agora = Date.now();
+      const filtradas = msgs.filter(m => (agora - m.timestamp) < 24 * 60 * 60 * 1000);
+      setMensagensMural(filtradas.reverse());
+    });
   }
 
   function iniciarListeners(cid) {
@@ -683,8 +768,11 @@ export default function App() {
         antrix: 0,
         indPontos: 0,
         streak: 0,
-        itensComprados: { temas: [], selos: [] },
+        itensComprados: { temas: [], selos: [], molduras: [] },
         seloEquipado: null,
+        molduraEquipada: null,
+        titulosDesbloqueados: {},
+        tituloEquipado: null,
         conquistas: {},
         estatisticas: {
           rankPrimeiro: 0,
@@ -694,6 +782,7 @@ export default function App() {
           totalTemasRarosComprados: 0,
           totalTemasLendariosComprados: 0,
           totalSelosComprados: 0,
+          totalMoldurasCompradas: 0,
           tomadasHorarioPerfeito: 0,
           temasDiferentesUsados: [],
           loginStreak: 0,
@@ -710,7 +799,7 @@ export default function App() {
     resetEstado();
   }
 
-  // ── Pair ────────────────────────────────────────────────────────────────────
+  // ── Pair / Conectar ─────────────────────────────────────────────────────────
   async function criarCasal() {
     setPairLoading(true);
     try {
@@ -746,7 +835,6 @@ export default function App() {
     setPairLoading(false);
   }
 
-  // Função para gerar código de convite para a dupla atual (admin)
   async function gerarCodigoConvite() {
     if (!casalId) {
       Alert.alert('Erro', 'Você não está em uma dupla.');
@@ -757,10 +845,17 @@ export default function App() {
     for (let i = 0; i < 6; i++) chave += chars[Math.floor(Math.random() * chars.length)];
     try {
       await set(ref(db, `pairCodes/${chave}`), { casalId });
+      setCodigoGerado(chave);
       Alert.alert('Código gerado!', `Compartilhe com seu parceiro: ${chave}\nEle deve usar "Entrar com chave".`);
     } catch(e) {
       Alert.alert('Erro', 'Falha ao gerar código.');
     }
+  }
+
+  async function entrarComCodigo() {
+    const code = pairInput.trim().toUpperCase();
+    if (!code) return;
+    await entrarCasal(); // reaproveita
   }
 
   // ── Gênero ──────────────────────────────────────────────────────────────────
@@ -829,6 +924,7 @@ export default function App() {
       totalTemasRarosComprados: estatisticas.totalTemasRarosComprados,
       totalTemasLendariosComprados: estatisticas.totalTemasLendariosComprados,
       totalSelosComprados: estatisticas.totalSelosComprados,
+      totalMoldurasCompradas: estatisticas.totalMoldurasCompradas,
       tomadasHorarioPerfeito: estatisticas.tomadasHorarioPerfeito,
       temasDiferentesUsados: estatisticas.temasDiferentesUsados.size,
       loginStreak: estatisticas.loginStreak,
@@ -840,16 +936,32 @@ export default function App() {
         const id = conquista.id;
         if (!conquistasDesbloqueadas[id] && conquista.cond(dados)) {
           setConquistasDesbloqueadas(prev => ({ ...prev, [id]: { desbloqueada: true, data: new Date().toISOString() } }));
+          // Adicionar título se houver
+          if (conquista.titulo || conquista.tituloSecreto) {
+            const titulo = conquista.tituloSecreto || conquista.titulo;
+            const cor = conquista.corTitulo || '#aaa';
+            const animado = !!conquista.tituloSecreto;
+            setTitulosDesbloqueados(prev => ({ ...prev, [id]: { titulo, cor, animado } }));
+            await update(ref(db, `usuarios/${authUser.uid}/titulosDesbloqueados/${id}`), { titulo, cor, animado });
+          }
+          // Aplicar recompensa de Antrix
           if (conquista.recompensa.antrix) {
             const novoAntrix = antrix + conquista.recompensa.antrix;
             setAntrix(novoAntrix);
             await update(ref(db, `usuarios/${authUser.uid}`), { antrix: novoAntrix });
             setEstatisticas(prev => ({ ...prev, antrixTotal: prev.antrixTotal + conquista.recompensa.antrix }));
           }
+          // Recompensa de tema e moldura
           if (conquista.recompensa.tema) {
-            const temaRecompensa = RECOMPENSAS_TEMAS[conquista.recompensa.tema];
-            if (temaRecompensa && !itensComprados.temas.includes(temaRecompensa.id)) {
-              await comprarItem(temaRecompensa.id, 0, 'tema', true);
+            const temaObj = RECOMPENSAS_ESPECIAIS[conquista.recompensa.tema];
+            if (temaObj && !itensComprados.temas.includes(temaObj.id)) {
+              await comprarItem(temaObj.id, 0, 'temas', true);
+            }
+          }
+          if (conquista.recompensa.moldura) {
+            const molduraObj = RECOMPENSAS_ESPECIAIS[conquista.recompensa.moldura];
+            if (molduraObj && !itensComprados.molduras.includes(molduraObj.id)) {
+              await comprarItem(molduraObj.id, 0, 'molduras', true);
             }
           }
           await update(ref(db, `usuarios/${authUser.uid}/conquistas/${id}`), { desbloqueada: true, data: new Date().toISOString() });
@@ -881,7 +993,7 @@ export default function App() {
       [tipo]: [...prev[tipo], itemId]
     }));
     await update(ref(db, `usuarios/${authUser.uid}/itensComprados/${tipo}`), [...itensComprados[tipo], itemId]);
-    if (tipo === 'tema') {
+    if (tipo === 'temas') {
       setEstatisticas(prev => ({
         ...prev,
         totalTemasComprados: prev.totalTemasComprados + 1,
@@ -893,9 +1005,12 @@ export default function App() {
         totalTemasRarosComprados: estatisticas.totalTemasRarosComprados + (isTemaRaro(itemId) ? 1 : 0),
         totalTemasLendariosComprados: estatisticas.totalTemasLendariosComprados + (isTemaLendario(itemId) ? 1 : 0),
       });
-    } else if (tipo === 'selo') {
+    } else if (tipo === 'selos') {
       setEstatisticas(prev => ({ ...prev, totalSelosComprados: prev.totalSelosComprados + 1 }));
       await update(ref(db, `usuarios/${authUser.uid}/estatisticas`), { totalSelosComprados: estatisticas.totalSelosComprados + 1 });
+    } else if (tipo === 'molduras') {
+      setEstatisticas(prev => ({ ...prev, totalMoldurasCompradas: prev.totalMoldurasCompradas + 1 }));
+      await update(ref(db, `usuarios/${authUser.uid}/estatisticas`), { totalMoldurasCompradas: estatisticas.totalMoldurasCompradas + 1 });
     }
     Alert.alert(gratuito ? 'Recompensa recebida!' : 'Compra realizada!', `${gratuito ? 'Item desbloqueado' : 'Item adquirido'}.`);
     await verificarTodasConquistas();
@@ -945,17 +1060,64 @@ export default function App() {
       ...ITENS_LOJA.selos.raro.map(s => s.id),
       ...ITENS_LOJA.selos.lendario.map(s => s.id),
     ];
-    setItensComprados({ temas: todosTemas, selos: todosSelos });
-    await set(ref(db, `usuarios/${authUser.uid}/itensComprados`), { temas: todosTemas, selos: todosSelos });
+    const todasMolduras = [
+      ...ITENS_LOJA.molduras.comum.map(m => m.id),
+      ...ITENS_LOJA.molduras.raro.map(m => m.id),
+      ...ITENS_LOJA.molduras.lendario.map(m => m.id),
+      ...Object.keys(RECOMPENSAS_ESPECIAIS).filter(k => k.startsWith('moldura_'))
+    ];
+    setItensComprados({ temas: todosTemas, selos: todosSelos, molduras: todasMolduras });
+    await set(ref(db, `usuarios/${authUser.uid}/itensComprados`), { temas: todosTemas, selos: todosSelos, molduras: todasMolduras });
     Alert.alert('Admin', 'Todos os itens desbloqueados!');
   }
 
   async function adminDesbloquearTemasSecretos() {
-    const secretos = Object.values(RECOMPENSAS_TEMAS).map(t => t.id);
+    const secretos = Object.values(RECOMPENSAS_ESPECIAIS).filter(t => t.id.startsWith('tema_')).map(t => t.id);
     const novosTemas = [...itensComprados.temas, ...secretos];
     setItensComprados(prev => ({ ...prev, temas: novosTemas }));
     await set(ref(db, `usuarios/${authUser.uid}/itensComprados/temas`), novosTemas);
     Alert.alert('Admin', 'Temas secretos desbloqueados!');
+  }
+
+  async function adminResetarTudo() {
+    Alert.alert(
+      '⚠️ Reset Total',
+      'Isso vai zerar todos os seus dados pessoais (Antrix, itens, conquistas, títulos, etc.). Tem certeza?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Resetar', style: 'destructive', onPress: async () => {
+          await set(ref(db, `usuarios/${authUser.uid}`), {
+            ...perfil,
+            antrix: 0,
+            indPontos: 0,
+            streak: 0,
+            itensComprados: { temas: [], selos: [], molduras: [] },
+            seloEquipado: null,
+            molduraEquipada: null,
+            titulosDesbloqueados: {},
+            tituloEquipado: null,
+            conquistas: {},
+            estatisticas: {
+              rankPrimeiro: 0,
+              rankPrimeiroConsecutivo: 0,
+              antrixTotal: 0,
+              totalTemasComprados: 0,
+              totalTemasRarosComprados: 0,
+              totalTemasLendariosComprados: 0,
+              totalSelosComprados: 0,
+              totalMoldurasCompradas: 0,
+              tomadasHorarioPerfeito: 0,
+              temasDiferentesUsados: [],
+              loginStreak: 0,
+              diasSemErroHorario: 0,
+              antrixSemGastar: 0,
+            }
+          });
+          resetEstado();
+          Alert.alert('✅ Reset completo', 'Seus dados foram resetados.');
+        }}
+      ]
+    );
   }
 
   async function adminLimparDiaHoje() {
@@ -1079,6 +1241,22 @@ export default function App() {
     } catch(e) {}
   }
 
+  // ── MURAL DO AMOR ────────────────────────────────────────────────────────────
+  async function enviarMensagem() {
+    if (!novaMensagem.trim()) return;
+    try {
+      const msgRef = push(ref(db, `casais/${casalId}/mural`));
+      await set(msgRef, {
+        texto: novaMensagem.trim(),
+        usuario: perfil?.nome,
+        timestamp: Date.now(),
+      });
+      setNovaMensagem('');
+    } catch(e) {
+      Alert.alert('Erro', 'Falha ao enviar mensagem.');
+    }
+  }
+
   // ── RANKING GLOBAL ───────────────────────────────────────────────────────────
   async function carregarRankingGlobal() {
     setLoadingRanking(true);
@@ -1108,12 +1286,26 @@ export default function App() {
     setModalRanking(true);
   }
 
-  // ── SELO: equipar ────────────────────────────────────────────────────────────
+  // ── SELO, MOLDURA, TÍTULO: equipar ───────────────────────────────────────────
   async function equiparSelo(seloId) {
     setSeloEquipado(seloId);
     await update(ref(db, `usuarios/${authUser.uid}`), { seloEquipado: seloId });
     setModalSelo(false);
     Alert.alert('Selo equipado!');
+  }
+
+  async function equiparMoldura(molduraId) {
+    setMolduraEquipada(molduraId);
+    await update(ref(db, `usuarios/${authUser.uid}`), { molduraEquipada: molduraId });
+    setModalMoldura(false);
+    Alert.alert('Moldura equipada!');
+  }
+
+  async function equiparTitulo(tituloId) {
+    setTituloEquipado(tituloId);
+    await update(ref(db, `usuarios/${authUser.uid}`), { tituloEquipado: tituloId });
+    setModalTitulo(false);
+    Alert.alert('Título equipado!');
   }
 
   // ── FOTO: galeria ───────────────────────────────────────────────────────────
@@ -1194,7 +1386,7 @@ export default function App() {
   if (tela === 'splash') return (
     <View style={s.splash}>
       <Text style={s.splashEmoji}>💊</Text>
-      <Text style={s.splashTitle}>Pílula da Ana - v6.0</Text>
+      <Text style={s.splashTitle}>Pílula da Ana - v{VERSAO_ATUAL}</Text>
       <ActivityIndicator color="#ff2d78" style={{ marginTop: 20 }} />
     </View>
   );
@@ -1202,7 +1394,7 @@ export default function App() {
   if (tela === 'auth') return (
     <ScrollView contentContainerStyle={s.authWrap} keyboardShouldPersistTaps="handled">
       <Text style={s.splashEmoji}>💊</Text>
-      <Text style={s.splashTitle}>Pílula da Ana - v6.0</Text>
+      <Text style={s.splashTitle}>Pílula da Ana - v{VERSAO_ATUAL}</Text>
       <Text style={s.authSub}>{authMode === 'login' ? 'Entrar na conta' : 'Criar conta'}</Text>
       {authMode === 'cadastro' && (
         <TextInput style={s.input} placeholder="Seu nome" placeholderTextColor="#555"
@@ -1269,7 +1461,7 @@ export default function App() {
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={false} />
       <Text style={{ position: 'absolute', top: 5, right: 10, color: '#aaa', fontSize: 10, zIndex: 100 }}>v{VERSAO_ATUAL}</Text>
 
-      {/* Modais (OTA, Amor, Admin, etc.) - mantidos */}
+      {/* Modais OTA, Amor, etc. (mantidos) */}
       <Modal transparent visible={modalOta} animationType="slide"
         onRequestClose={() => { if (!otaInfo?.forcarAtualizar) ignorarOta(); }}>
         <View style={s.modalWrap}><View style={s.modalCard}>
@@ -1340,10 +1532,6 @@ export default function App() {
               <Text style={s.adminBtnTxt}>▶️ Encerrar Pausa</Text>
             </TouchableOpacity>
           )}
-          {/* Botões novos */}
-          <TouchableOpacity style={s.adminBtn} onPress={gerarCodigoConvite}>
-            <Text style={s.adminBtnTxt}>🔑 Gerar código de convite</Text>
-          </TouchableOpacity>
           <TouchableOpacity style={s.adminBtn} onPress={adminLimparDiaHoje}>
             <Text style={s.adminBtnTxt}>🗑️ Remover registro de hoje</Text>
           </TouchableOpacity>
@@ -1354,10 +1542,13 @@ export default function App() {
             <Text style={[s.adminBtnTxt, { color: '#44ff44' }]}>🏆 Desbloquear todas conquistas</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[s.adminBtn, { borderColor: '#44ff44' }]} onPress={adminDesbloquearTodosItens}>
-            <Text style={[s.adminBtnTxt, { color: '#44ff44' }]}>🎨 Desbloquear todos itens (temas+selos)</Text>
+            <Text style={[s.adminBtnTxt, { color: '#44ff44' }]}>🎨 Desbloquear todos itens (temas+selos+molduras)</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[s.adminBtn, { borderColor: '#ff66cc' }]} onPress={adminDesbloquearTemasSecretos}>
             <Text style={[s.adminBtnTxt, { color: '#ff66cc' }]}>✨ Desbloquear temas secretos</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[s.adminBtn, { borderColor: '#ff4444' }]} onPress={adminResetarTudo}>
+            <Text style={[s.adminBtnTxt, { color: '#ff4444' }]}>⚠️ Reset total (apagar todos os dados)</Text>
           </TouchableOpacity>
           <TouchableOpacity style={s.btnSecondary} onPress={() => setModalAdmin(false)}>
             <Text style={s.btnSecondaryTxt}>Fechar</Text>
@@ -1461,6 +1652,45 @@ export default function App() {
         </View></View>
       </Modal>
 
+      <Modal transparent visible={modalMoldura} animationType="slide">
+        <View style={s.modalWrap}><View style={s.modalCard}>
+          <Text style={s.modalTitulo}>🖼️ Equipar moldura</Text>
+          <ScrollView style={{ maxHeight: 400 }}>
+            {itensComprados.molduras.map(molduraId => {
+              const molduraItem = getMolduraById(molduraId);
+              if (!molduraItem) return null;
+              return (
+                <TouchableOpacity key={molduraId} style={[s.temaBtn, molduraEquipada === molduraId && { borderColor: tema.primary }]}
+                  onPress={() => equiparMoldura(molduraId)}>
+                  <View style={[s.molduraCor, { backgroundColor: molduraItem.cor !== 'rainbow' ? molduraItem.cor : '#ffaa44', width: 20, height: 20, borderRadius: 10, marginRight: 15 }]} />
+                  <Text style={s.temaTxt}>{molduraItem.nome}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+          <TouchableOpacity style={s.btnSecondary} onPress={() => setModalMoldura(false)}>
+            <Text style={s.btnSecondaryTxt}>Fechar</Text>
+          </TouchableOpacity>
+        </View></View>
+      </Modal>
+
+      <Modal transparent visible={modalTitulo} animationType="slide">
+        <View style={s.modalWrap}><View style={s.modalCard}>
+          <Text style={s.modalTitulo}>🏅 Escolher título</Text>
+          <ScrollView style={{ maxHeight: 400 }}>
+            {Object.entries(titulosDesbloqueados).map(([id, data]) => (
+              <TouchableOpacity key={id} style={[s.temaBtn, tituloEquipado === id && { borderColor: tema.primary }]}
+                onPress={() => equiparTitulo(id)}>
+                <Text style={[s.tituloTexto, { color: data.cor }]}>{data.titulo}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          <TouchableOpacity style={s.btnSecondary} onPress={() => setModalTitulo(false)}>
+            <Text style={s.btnSecondaryTxt}>Fechar</Text>
+          </TouchableOpacity>
+        </View></View>
+      </Modal>
+
       <Modal transparent visible={modalRanking} animationType="slide">
         <View style={s.modalWrap}><View style={s.modalCard}>
           <Text style={s.modalTitulo}>🏆 Ranking Global</Text>
@@ -1483,12 +1713,24 @@ export default function App() {
       {/* Header */}
       <View style={s.header}>
         <TouchableOpacity style={s.headerLeft} onPress={() => setAbaAtiva('perfil')}>
-          {fotoAtual
-            ? <Image source={{ uri: fotoAtual }} style={s.avatarHeader} />
-            : <View style={s.avatarVazio}><Text>👤</Text></View>
-          }
+          <View style={[s.avatarContainer, molduraEquipada && getMolduraById(molduraEquipada)?.animado && s.animada]}>
+            {fotoAtual
+              ? <Image source={{ uri: fotoAtual }} style={s.avatarHeader} />
+              : <View style={s.avatarVazio}><Text>👤</Text></View>
+            }
+            {seloEquipado && (
+              <View style={s.seloOverlay}>
+                <Text style={s.seloEmoji}>{getSeloById(seloEquipado)?.emoji || '✨'}</Text>
+              </View>
+            )}
+          </View>
           <View style={{ marginLeft: 10 }}>
             <Text style={s.headerTitle}>{nomeAtual}</Text>
+            {tituloEquipado && titulosDesbloqueados[tituloEquipado] && (
+              <Animated.Text style={[s.tituloExibido, { color: titulosDesbloqueados[tituloEquipado].cor }, titulosDesbloqueados[tituloEquipado].animado && s.tituloAnimado]}>
+                {titulosDesbloqueados[tituloEquipado].titulo}
+              </Animated.Text>
+            )}
             <Text style={s.headerSub}>{parceiro ? `💞 ${parceiro.nome}` : '💔 Sozinho'}</Text>
           </View>
         </TouchableOpacity>
@@ -1504,10 +1746,10 @@ export default function App() {
         </View>
       </View>
 
-      {/* Abas (7) */}
+      {/* Abas (9) */}
       <View style={s.abas}>
         {ABAS.map((aba) => {
-          const icones = { home:'🏠', calendario:'📅', ranking:'🏆', loja:'🛒', conquistas:'🏅', sugestoes:'💡', perfil:'👤' };
+          const icones = { home:'🏠', calendario:'📅', ranking:'🏆', loja:'🛒', conquistas:'🏅', mural:'💌', conectar:'🔗', sugestoes:'💡', perfil:'👤' };
           return (
             <TouchableOpacity key={aba}
               style={[s.aba, abaAtiva === aba && { borderBottomWidth: 2, borderBottomColor: tema.primary }]}
@@ -1618,7 +1860,7 @@ export default function App() {
           <View style={s.lojaGrid}>
             {ITENS_LOJA.temas.comum.map(item => (
               <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.temas.includes(item.id) && s.lojaItemOwned]}
-                onPress={() => comprarItem(item.id, item.preco, 'tema')} disabled={itensComprados.temas.includes(item.id)}>
+                onPress={() => comprarItem(item.id, item.preco, 'temas')} disabled={itensComprados.temas.includes(item.id)}>
                 <View style={[s.corTema, { backgroundColor: item.cor }]} />
                 <Text style={s.lojaNome}>{item.nome}</Text>
                 <Text style={s.lojaPreco}>{item.preco}</Text>
@@ -1630,7 +1872,7 @@ export default function App() {
           <View style={s.lojaGrid}>
             {ITENS_LOJA.temas.raro.map(item => (
               <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.temas.includes(item.id) && s.lojaItemOwned]}
-                onPress={() => comprarItem(item.id, item.preco, 'tema')} disabled={itensComprados.temas.includes(item.id)}>
+                onPress={() => comprarItem(item.id, item.preco, 'temas')} disabled={itensComprados.temas.includes(item.id)}>
                 <View style={[s.corTema, { backgroundColor: item.cor }]} />
                 <Text style={s.lojaNome}>{item.nome}</Text>
                 <Text style={s.lojaPreco}>{item.preco}</Text>
@@ -1642,7 +1884,7 @@ export default function App() {
           <View style={s.lojaGrid}>
             {ITENS_LOJA.temas.bonito.map(item => (
               <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.temas.includes(item.id) && s.lojaItemOwned]}
-                onPress={() => comprarItem(item.id, item.preco, 'tema')} disabled={itensComprados.temas.includes(item.id)}>
+                onPress={() => comprarItem(item.id, item.preco, 'temas')} disabled={itensComprados.temas.includes(item.id)}>
                 <View style={[s.corTema, { backgroundColor: item.cor }]} />
                 <Text style={s.lojaNome}>{item.nome}</Text>
                 <Text style={s.lojaPreco}>{item.preco}</Text>
@@ -1654,7 +1896,7 @@ export default function App() {
           <View style={s.lojaGrid}>
             {ITENS_LOJA.temas.lendario.map(item => (
               <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.temas.includes(item.id) && s.lojaItemOwned]}
-                onPress={() => comprarItem(item.id, item.preco, 'tema')} disabled={itensComprados.temas.includes(item.id)}>
+                onPress={() => comprarItem(item.id, item.preco, 'temas')} disabled={itensComprados.temas.includes(item.id)}>
                 <View style={[s.corTema, { backgroundColor: item.cor }]} />
                 <Text style={s.lojaNome}>{item.nome}</Text>
                 <Text style={s.lojaPreco}>{item.preco}</Text>
@@ -1666,7 +1908,7 @@ export default function App() {
           <View style={s.lojaGrid}>
             {ITENS_LOJA.selos.comum.map(item => (
               <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.selos.includes(item.id) && s.lojaItemOwned]}
-                onPress={() => comprarItem(item.id, item.preco, 'selo')} disabled={itensComprados.selos.includes(item.id)}>
+                onPress={() => comprarItem(item.id, item.preco, 'selos')} disabled={itensComprados.selos.includes(item.id)}>
                 <Text style={{ fontSize: 24, marginRight: 8 }}>{item.emoji}</Text>
                 <Text style={s.lojaNome}>{item.nome}</Text>
                 <Text style={s.lojaPreco}>{item.preco}</Text>
@@ -1678,7 +1920,7 @@ export default function App() {
           <View style={s.lojaGrid}>
             {ITENS_LOJA.selos.raro.map(item => (
               <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.selos.includes(item.id) && s.lojaItemOwned]}
-                onPress={() => comprarItem(item.id, item.preco, 'selo')} disabled={itensComprados.selos.includes(item.id)}>
+                onPress={() => comprarItem(item.id, item.preco, 'selos')} disabled={itensComprados.selos.includes(item.id)}>
                 <Text style={{ fontSize: 24, marginRight: 8 }}>{item.emoji}</Text>
                 <Text style={s.lojaNome}>{item.nome}</Text>
                 <Text style={s.lojaPreco}>{item.preco}</Text>
@@ -1690,8 +1932,44 @@ export default function App() {
           <View style={s.lojaGrid}>
             {ITENS_LOJA.selos.lendario.map(item => (
               <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.selos.includes(item.id) && s.lojaItemOwned]}
-                onPress={() => comprarItem(item.id, item.preco, 'selo')} disabled={itensComprados.selos.includes(item.id)}>
+                onPress={() => comprarItem(item.id, item.preco, 'selos')} disabled={itensComprados.selos.includes(item.id)}>
                 <Text style={{ fontSize: 24, marginRight: 8 }}>{item.emoji}</Text>
+                <Text style={s.lojaNome}>{item.nome}</Text>
+                <Text style={s.lojaPreco}>{item.preco}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {/* Molduras Comuns */}
+          <Text style={s.catTitulo}>🖼️ Molduras Comuns (20 Antrix)</Text>
+          <View style={s.lojaGrid}>
+            {ITENS_LOJA.molduras.comum.map(item => (
+              <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.molduras.includes(item.id) && s.lojaItemOwned]}
+                onPress={() => comprarItem(item.id, item.preco, 'molduras')} disabled={itensComprados.molduras.includes(item.id)}>
+                <View style={[s.corTema, { backgroundColor: item.cor !== 'rainbow' ? item.cor : '#ffaa44' }]} />
+                <Text style={s.lojaNome}>{item.nome}</Text>
+                <Text style={s.lojaPreco}>{item.preco}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {/* Molduras Raras */}
+          <Text style={s.catTitulo}>✨ Molduras Raras (80 Antrix)</Text>
+          <View style={s.lojaGrid}>
+            {ITENS_LOJA.molduras.raro.map(item => (
+              <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.molduras.includes(item.id) && s.lojaItemOwned]}
+                onPress={() => comprarItem(item.id, item.preco, 'molduras')} disabled={itensComprados.molduras.includes(item.id)}>
+                <View style={[s.corTema, { backgroundColor: item.cor !== 'rainbow' ? item.cor : '#ffaa44' }]} />
+                <Text style={s.lojaNome}>{item.nome}</Text>
+                <Text style={s.lojaPreco}>{item.preco}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {/* Molduras Lendárias */}
+          <Text style={s.catTitulo}>🌟 Molduras Lendárias (300 Antrix)</Text>
+          <View style={s.lojaGrid}>
+            {ITENS_LOJA.molduras.lendario.map(item => (
+              <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.molduras.includes(item.id) && s.lojaItemOwned]}
+                onPress={() => comprarItem(item.id, item.preco, 'molduras')} disabled={itensComprados.molduras.includes(item.id)}>
+                <View style={[s.corTema, { backgroundColor: item.cor !== 'rainbow' ? item.cor : '#ffaa44' }]} />
                 <Text style={s.lojaNome}>{item.nome}</Text>
                 <Text style={s.lojaPreco}>{item.preco}</Text>
               </TouchableOpacity>
@@ -1719,6 +1997,61 @@ export default function App() {
           ))}
         </>}
 
+        {/* MURAL DO AMOR */}
+        {abaAtiva === 'mural' && <>
+          <Text style={s.secLabel}>💌 Mural do Amor</Text>
+          <FlatList
+            data={mensagensMural}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <View style={s.mensagemItem}>
+                <Text style={s.mensagemUsuario}>{item.usuario}</Text>
+                <Text style={s.mensagemTexto}>{item.texto}</Text>
+                <Text style={s.mensagemData}>{new Date(item.timestamp).toLocaleString()}</Text>
+              </View>
+            )}
+            ListEmptyComponent={<Text style={s.authSub}>Nenhuma mensagem nas últimas 24h. Deixe um recado!</Text>}
+          />
+          <TextInput
+            style={[s.input, { marginTop: 10 }]}
+            placeholder="Escreva uma mensagem de amor..."
+            placeholderTextColor="#555"
+            value={novaMensagem}
+            onChangeText={setNovaMensagem}
+            multiline
+          />
+          <TouchableOpacity style={s.btnPrimary} onPress={enviarMensagem}>
+            <Text style={s.btnPrimaryTxt}>💌 Enviar mensagem</Text>
+          </TouchableOpacity>
+        </>}
+
+        {/* CONECTAR (Pareamento) */}
+        {abaAtiva === 'conectar' && <>
+          <Text style={s.secLabel}>🔗 Conectar com parceiro(a)</Text>
+          <Text style={s.authSub}>Gerar código ou inserir código recebido</Text>
+          <TouchableOpacity style={s.btnPrimary} onPress={gerarCodigoConvite}>
+            <Text style={s.btnPrimaryTxt}>✨ Gerar código de convite</Text>
+          </TouchableOpacity>
+          {codigoGerado !== '' && (
+            <View style={s.chaveBox}>
+              <Text style={s.chaveLabel}>Seu código:</Text>
+              <Text style={s.chaveValor}>{codigoGerado}</Text>
+            </View>
+          )}
+          <Text style={s.authSub}>ou</Text>
+          <TextInput
+            style={[s.input, s.inputChave]}
+            placeholder="Código de 6 dígitos"
+            placeholderTextColor="#555"
+            value={pairInput}
+            onChangeText={t => setPairInput(t.toUpperCase())}
+            maxLength={6}
+          />
+          <TouchableOpacity style={s.btnPrimary} onPress={entrarComCodigo} disabled={pairLoading}>
+            <Text style={s.btnPrimaryTxt}>🔑 Entrar com código</Text>
+          </TouchableOpacity>
+        </>}
+
         {/* SUGESTÕES */}
         {abaAtiva === 'sugestoes' && <>
           <Text style={s.secLabel}>💡 Sugestões</Text>
@@ -1739,12 +2072,24 @@ export default function App() {
         {abaAtiva === 'perfil' && <>
           <View style={s.perfilCard}>
             <TouchableOpacity onPress={escolherFotoGaleria}>
-              {fotoAtual
-                ? <Image source={{ uri: fotoAtual }} style={s.fotoPerfil} />
-                : <View style={s.fotoPerfilVazio}><Text style={{ fontSize: 40 }}>📷</Text></View>
-              }
+              <View style={[s.avatarContainerPerfil, molduraEquipada && getMolduraById(molduraEquipada)?.animado && s.animada]}>
+                {fotoAtual
+                  ? <Image source={{ uri: fotoAtual }} style={s.fotoPerfil} />
+                  : <View style={s.fotoPerfilVazio}><Text style={{ fontSize: 40 }}>📷</Text></View>
+                }
+                {seloEquipado && (
+                  <View style={s.seloOverlayPerfil}>
+                    <Text style={s.seloEmojiPerfil}>{getSeloById(seloEquipado)?.emoji || '✨'}</Text>
+                  </View>
+                )}
+              </View>
             </TouchableOpacity>
             <Text style={s.perfilNome}>{nomeAtual}</Text>
+            {tituloEquipado && titulosDesbloqueados[tituloEquipado] && (
+              <Animated.Text style={[s.tituloExibidoPerfil, { color: titulosDesbloqueados[tituloEquipado].cor }, titulosDesbloqueados[tituloEquipado].animado && s.tituloAnimado]}>
+                {titulosDesbloqueados[tituloEquipado].titulo}
+              </Animated.Text>
+            )}
             {perfil?.genero && (
               <Text style={{ color: tema.sub, fontSize: 13, marginTop: 4 }}>
                 {perfil.genero === 'mulher' ? '👩 Mulher' : perfil.genero === 'homem' ? '👨 Homem' : '⚪ Não informado'}
@@ -1765,24 +2110,17 @@ export default function App() {
                 <Text style={s.statLabel}>Streak</Text>
               </View>
             </View>
-            {/* Selo equipado */}
-            {seloEquipado && (() => {
-              let seloItem = null;
-              for (let cat of Object.values(ITENS_LOJA.selos)) {
-                const found = cat.find(s => s.id === seloEquipado);
-                if (found) { seloItem = found; break; }
-              }
-              return (
-                <View style={s.seloEquipado}>
-                  <Text style={{ fontSize: 20, marginRight: 8 }}>{seloItem?.emoji || '✨'}</Text>
-                  <Text style={{ color: tema.sub }}>Selo equipado</Text>
-                </View>
-              );
-            })()}
+            {/* Botões de equipar */}
             <TouchableOpacity style={[s.adminBtn, { width: '100%', marginTop: 8 }]} onPress={() => setModalSelo(true)}>
               <Text style={s.adminBtnTxt}>✨ Escolher selo</Text>
             </TouchableOpacity>
-            {/* Botões de configuração */}
+            <TouchableOpacity style={[s.adminBtn, { width: '100%', marginTop: 8 }]} onPress={() => setModalMoldura(true)}>
+              <Text style={s.adminBtnTxt}>🖼️ Escolher moldura</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.adminBtn, { width: '100%', marginTop: 8 }]} onPress={() => setModalTitulo(true)}>
+              <Text style={s.adminBtnTxt}>🏅 Escolher título</Text>
+            </TouchableOpacity>
+            {/* Configurações */}
             <TouchableOpacity style={[s.adminBtn, { width: '100%', marginTop: 12 }]} onPress={() => {
               setHorarioInput(meuHorario || '20:30');
               setModalHorario(true);
@@ -1811,7 +2149,7 @@ export default function App() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// STYLES
+// STYLES (completos)
 // ══════════════════════════════════════════════════════════════════════════════
 const makeStyles = (tema) => StyleSheet.create({
   root:           { flex: 1, backgroundColor: tema.bg },
@@ -1831,11 +2169,22 @@ const makeStyles = (tema) => StyleSheet.create({
   headerLeft:     { flexDirection: 'row', alignItems: 'center' },
   headerTitle:    { color: '#fff', fontWeight: '800', fontSize: 18 },
   headerSub:      { color: tema.sub, fontSize: 12 },
+  avatarContainer: { position: 'relative', width: 40, height: 40 },
   avatarHeader:   { width: 40, height: 40, borderRadius: 20 },
   avatarVazio:    { width: 40, height: 40, borderRadius: 20, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' },
+  seloOverlay:    { position: 'absolute', bottom: -5, right: -5, backgroundColor: '#000000aa', borderRadius: 12, padding: 2 },
+  seloEmoji:      { fontSize: 14 },
+  avatarContainerPerfil: { position: 'relative', width: 100, height: 100, borderRadius: 50 },
+  fotoPerfil:     { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: tema.primary },
+  fotoPerfilVazio:{ width: 100, height: 100, borderRadius: 50, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' },
+  seloOverlayPerfil: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#000000aa', borderRadius: 20, padding: 4 },
+  seloEmojiPerfil: { fontSize: 20 },
+  tituloExibido:  { fontSize: 10, color: '#aaa', marginTop: 2 },
+  tituloExibidoPerfil: { fontSize: 14, marginTop: 4, textAlign: 'center' },
+  tituloAnimado:  { textShadowColor: '#ffaa44', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 5 },
   iconBtn:        { width: 36, height: 36, borderRadius: 18, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' },
   abas:           { flexDirection: 'row', backgroundColor: tema.card, borderBottomWidth: 1, borderBottomColor: tema.border },
-  aba:            { flex: 1, padding: 15, alignItems: 'center' },
+  aba:            { flex: 1, padding: 12, alignItems: 'center' },
   abaTxt:         { fontSize: 20, opacity: 0.4 },
   body:           { flex: 1 },
   bodyContent:    { padding: 20 },
@@ -1856,8 +2205,6 @@ const makeStyles = (tema) => StyleSheet.create({
   rankNome:       { color: '#fff', fontWeight: '700' },
   rankPts:        { color: tema.primary, fontWeight: '800', fontSize: 20 },
   perfilCard:     { alignItems: 'center', padding: 30, backgroundColor: tema.card, borderRadius: 24 },
-  fotoPerfil:     { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: tema.primary },
-  fotoPerfilVazio:{ width: 100, height: 100, borderRadius: 50, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' },
   perfilNome:     { color: '#fff', fontSize: 22, fontWeight: '800', marginTop: 15 },
   perfilVersao:   { color: tema.sub, fontSize: 12, marginTop: 5, marginBottom: 8 },
   modalWrap:      { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', padding: 20 },
@@ -1882,8 +2229,6 @@ const makeStyles = (tema) => StyleSheet.create({
   statItem:       { alignItems: 'center' },
   statValue:      { fontSize: 24, fontWeight: 'bold', color: tema.primary },
   statLabel:      { fontSize: 12, color: tema.sub, marginTop: 4 },
-  conquistasBox:  { width: '100%', backgroundColor: tema.bg, borderRadius: 12, padding: 12, marginVertical: 10, borderWidth: 1, borderColor: tema.border },
-  conquistasTitulo:{ color: '#fff', fontWeight: 'bold', marginBottom: 8, fontSize: 14 },
   conquistaItem:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: tema.border },
   conquistaNome:  { color: tema.sub, fontSize: 12, flex: 1 },
   conquistaDesbloq:{ color: '#fff', fontWeight: 'bold' },
@@ -1901,5 +2246,11 @@ const makeStyles = (tema) => StyleSheet.create({
   lojaNome:       { color: '#fff', fontSize: 12, textAlign: 'center' },
   lojaPreco:      { color: tema.primary, fontSize: 10, marginTop: 4 },
   catConquista:   { color: tema.primary, fontSize: 16, fontWeight: 'bold', marginTop: 16, marginBottom: 8 },
-  seloEquipado:   { flexDirection: 'row', alignItems: 'center', backgroundColor: tema.bg, padding: 8, borderRadius: 20, marginVertical: 8 },
+  mensagemItem:   { backgroundColor: tema.card, borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: tema.border },
+  mensagemUsuario:{ color: tema.primary, fontWeight: 'bold', fontSize: 12 },
+  mensagemTexto:  { color: '#fff', fontSize: 14, marginTop: 4 },
+  mensagemData:   { color: tema.sub, fontSize: 10, marginTop: 4, textAlign: 'right' },
+  animada:        { borderWidth: 2, borderColor: '#ffaa44', shadowColor: '#ffaa44', shadowOffset: { width: 0, height: 0 }, shadowRadius: 5, shadowOpacity: 0.8 },
+  tituloTexto:    { fontSize: 16, fontWeight: 'bold' },
+  molduraCor:     { width: 20, height: 20, borderRadius: 10, marginRight: 15 },
 });
