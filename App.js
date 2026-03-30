@@ -12,6 +12,8 @@ import { initializeApp } from 'firebase/app';
 import {
   getDatabase, ref, set, get, onValue, push, remove, off, update, query, orderByChild, limitToLast
 } from 'firebase/database';
+import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
+import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
   signOut, onAuthStateChanged, updateProfile
 } from 'firebase/auth';
@@ -31,7 +33,9 @@ let firebaseApp, db, auth;
 try {
   firebaseApp = initializeApp(firebaseConfig);
   db = getDatabase(firebaseApp);
-  auth = getAuth(firebaseApp);
+  auth = initializeAuth(firebaseApp, {
+    persistence: getReactNativePersistence(ReactNativeAsyncStorage)
+  });
 } catch (e) {
   console.error("Firebase Init Error:", e);
 }
@@ -400,8 +404,7 @@ function ConsistencyCircle({ historico, dataInicio, tema }) {
       </View>
     </Animated.View>
   );
-}
-
+       }
 // ══════════════════════════════════════════════════════════════════════════════
 // MAIN APP
 // ══════════════════════════════════════════════════════════════════════════════
@@ -448,7 +451,7 @@ export default function App() {
   const [itensComprados, setItensComprados] = useState({ temas: [], selos: [], molduras: [] });
   const [seloEquipado, setSeloEquipado] = useState(null);
   const [molduraEquipada, setMolduraEquipada] = useState(null);
-  const [titulosDesbloqueados, setTitulosDesbloqueados] = useState({}); // id -> { titulo, cor, animado }
+  const [titulosDesbloqueados, setTitulosDesbloqueados] = useState({});
   const [tituloEquipado, setTituloEquipado] = useState(null);
   const [conquistasDesbloqueadas, setConquistasDesbloqueadas] = useState({});
   const [estatisticas, setEstatisticas] = useState({
@@ -593,7 +596,12 @@ export default function App() {
       setAntrix(p.antrix || 0);
       setIndPontos(p.indPontos || 0);
       setStreak(p.streak || 0);
-      setItensComprados(p.itensComprados || { temas: [], selos: [], molduras: [] });
+      let itens = p.itensComprados || { temas: [], selos: [], molduras: [] };
+      // Garantir que todas as propriedades existam
+      if (!itens.temas) itens.temas = [];
+      if (!itens.selos) itens.selos = [];
+      if (!itens.molduras) itens.molduras = [];
+      setItensComprados(itens);
       setSeloEquipado(p.seloEquipado || null);
       setMolduraEquipada(p.molduraEquipada || null);
       setTitulosDesbloqueados(p.titulosDesbloqueados || {});
@@ -611,7 +619,6 @@ export default function App() {
         setTela('app');
         const tSnap = await get(ref(db, `casais/${p.casalId}/tema`));
         if (tSnap.exists()) aplicarTema(tSnap.val());
-        // Carregar mural
         carregarMural(p.casalId);
       } else {
         setTela('pair');
@@ -711,7 +718,10 @@ export default function App() {
 
   async function configurarAlarmes(cid) {
     try {
-      if (!Device.isDevice) return;
+      if (!Device.isDevice) {
+        console.log("Notificações desabilitadas no Expo Go");
+        return;
+      }
       const { status } = await Notifications.requestPermissionsAsync();
       if (status !== 'granted') return;
       await Notifications.cancelAllScheduledNotificationsAsync();
@@ -739,7 +749,9 @@ export default function App() {
         content: { title: '⚠️ Janela fechando!', body: 'Faltam 5 min para o fim da Janela de Ouro!', sound: true },
         trigger: { hour: JANELA_FIM.h, minute: JANELA_FIM.m - 5, repeats: true },
       });
-    } catch(e) {}
+    } catch(e) {
+      console.warn("Erro ao configurar notificações:", e);
+    }
   }
 
   // ── Auth ────────────────────────────────────────────────────────────────────
@@ -855,7 +867,7 @@ export default function App() {
   async function entrarComCodigo() {
     const code = pairInput.trim().toUpperCase();
     if (!code) return;
-    await entrarCasal(); // reaproveita
+    await entrarCasal();
   }
 
   // ── Gênero ──────────────────────────────────────────────────────────────────
@@ -936,7 +948,6 @@ export default function App() {
         const id = conquista.id;
         if (!conquistasDesbloqueadas[id] && conquista.cond(dados)) {
           setConquistasDesbloqueadas(prev => ({ ...prev, [id]: { desbloqueada: true, data: new Date().toISOString() } }));
-          // Adicionar título se houver
           if (conquista.titulo || conquista.tituloSecreto) {
             const titulo = conquista.tituloSecreto || conquista.titulo;
             const cor = conquista.corTitulo || '#aaa';
@@ -944,14 +955,12 @@ export default function App() {
             setTitulosDesbloqueados(prev => ({ ...prev, [id]: { titulo, cor, animado } }));
             await update(ref(db, `usuarios/${authUser.uid}/titulosDesbloqueados/${id}`), { titulo, cor, animado });
           }
-          // Aplicar recompensa de Antrix
           if (conquista.recompensa.antrix) {
             const novoAntrix = antrix + conquista.recompensa.antrix;
             setAntrix(novoAntrix);
             await update(ref(db, `usuarios/${authUser.uid}`), { antrix: novoAntrix });
             setEstatisticas(prev => ({ ...prev, antrixTotal: prev.antrixTotal + conquista.recompensa.antrix }));
           }
-          // Recompensa de tema e moldura
           if (conquista.recompensa.tema) {
             const temaObj = RECOMPENSAS_ESPECIAIS[conquista.recompensa.tema];
             if (temaObj && !itensComprados.temas.includes(temaObj.id)) {
@@ -2149,7 +2158,7 @@ export default function App() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// STYLES (completos)
+// STYLES
 // ══════════════════════════════════════════════════════════════════════════════
 const makeStyles = (tema) => StyleSheet.create({
   root:           { flex: 1, backgroundColor: tema.bg },
