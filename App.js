@@ -1,6 +1,6 @@
 // ============================================================
 // ANINHA 64 — App.js
-// Versão: alpha 0.0.7
+// Versão: alpha 0.0.14
 // ============================================================
 //
 // ════════════════════════════════════════════════════════════
@@ -180,7 +180,15 @@
 //   alpha 0.0.4 — (incremento)
 //   alpha 0.0.5 — (incremento)
 //   alpha 0.0.6 — versão estável com todas as 8 abas funcionando
-//   alpha 0.0.7 — dossiê v2.0 embutido no código, versão atualizada
+//   alpha 0.0.14 — dossiê v2.0 embutido no código, versão atualizada
+//   alpha 0.0.15 — sistema de notificação por casal:
+//                  · Horário salvo em /usuarios/{uid}/horarioPessoal
+//                  · Só mulher pode definir horário (homem vê "—" no botão, não abre modal)
+//                  · Ao parear/salvar, horários das mulheres vão p/ /casais/{id}/config/horariosNotificacao
+//                  · Todos do casal recebem notificação em CADA horário registrado no casal
+//                  · 2 mulheres pareadas = ambas recebem nas 2 notificações (12:30 e 17:30)
+//                  · Homem pareado = recebe automaticamente no horário da parceira
+//                  · Home mostra aviso "Coloque seu horário" se for mulher sem horário definido
 //
 // ════════════════════════════════════════════════════════════
 // 💡 PRÓXIMAS MELHORIAS SUGERIDAS
@@ -329,8 +337,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView,
   Alert, TextInput, Modal, Animated, Image,
-  ActivityIndicator, Dimensions, PanResponder, StatusBar, FlatList
+  ActivityIndicator, Dimensions, PanResponder, StatusBar, FlatList, Platform
 } from 'react-native';
+
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import * as FileSystem from 'expo-file-system';
@@ -367,7 +376,7 @@ try {
   console.error("Firebase Init Error:", e);
 }
 
-const VERSAO_ATUAL  = "alpha 0.0.7";
+const VERSAO_ATUAL  = "alpha 0.0.15";
 const ADMIN_EMAIL   = "Harlleyduarte@gmail.com";
 const JANELA_INICIO = { h: 20, m: 30 };
 const JANELA_FIM    = { h: 20, m: 40 };
@@ -379,6 +388,36 @@ const TEMAS_BASE = {
   ciano:  { primary:'#00e5ff', bg:'#000a10', card:'#001520', border:'#003040', accent:'#0088cc', text:'#fff', sub:'#44aacc' },
   verde:  { primary:'#00ff87', bg:'#000a05', card:'#001510', border:'#003020', accent:'#00cc66', text:'#fff', sub:'#44cc88' },
 };
+
+// ════════════════════════════════════════════════════════════════════
+// 🎨 ÁREA DE PERSONALIZAÇÃO DO HARLLEY — NÃO REMOVER ESTE BLOCO
+// ════════════════════════════════════════════════════════════════════
+// Tudo abaixo será preenchido pelo Harlley com seus próprios designs.
+// Itens lendários e secretos são DESENHADOS À MÃO pelo Harlley.
+// Outras IAs devem PRESERVAR este bloco e apenas adicionar dentro dele.
+//
+// TEMAS PERSONALIZADOS (adicionar aqui):
+// Exemplo: { id: 'meu_tema', nome: 'Meu Tema', preco: 500, cor: '#000000', bg: '#0a0000', ... }
+const TEMAS_PERSONALIZADOS_HARLLEY = [
+  // { id: 'exemplo', nome: 'Exemplo', preco: 500, cor: '#ff0000' },
+];
+//
+// SELOS PERSONALIZADOS (desenhados à mão — lendários):
+// Adicionar na lista ITENS_LOJA.selos.lendario ou criar nova categoria
+const SELOS_PERSONALIZADOS_HARLLEY = [
+  // { id: 'selo_harlley_1', nome: 'Símbolo Especial', preco: 300, emoji: '🎨' },
+];
+//
+// MOLDURAS PERSONALIZADAS (desenhadas à mão — lendárias):
+const MOLDURAS_PERSONALIZADAS_HARLLEY = [
+  // { id: 'moldura_harlley_1', nome: 'Moldura Exclusiva', preco: 300, cor: '#ff2d78', estilo: 'solid' },
+];
+//
+// CONQUISTAS SECRETAS PERSONALIZADAS:
+// Adicionar em CONQUISTAS.especial
+// { id: 'conquista_secreta_1', nome: '...', titulo: '...', corTitulo: '#fff', cond: () => false }
+//
+// ════════════════════════════════════════════════════════════════════
 
 const ITENS_LOJA = {
   temas: {
@@ -523,6 +562,9 @@ const RECOMPENSAS_ESPECIAIS = {
 };
 
 const CONQUISTAS = {
+  especial: [
+    { id: 'boas_vindas', nome: '🎉 Bem-vindo(a) ao app!', titulo: 'Novato(a)', corTitulo: '#aaaaff', cond: (s) => false, recompensa: { antrix: 10 } },
+  ],
   streak: [
     { id: 'streak3', nome: '3 dias seguidos', titulo: 'Iniciante', corTitulo: '#aaa', cond: (s) => s.streak >= 3, recompensa: { antrix: 20 } },
     { id: 'streak5', nome: '5 dias seguidos', titulo: 'Persistente', corTitulo: '#ccc', cond: (s) => s.streak >= 5, recompensa: { antrix: 20 } },
@@ -541,6 +583,19 @@ const CONQUISTAS = {
     { id: 'criar_conta', nome: 'Criar conta', titulo: 'Bem-vindo', corTitulo: '#aaa', cond: () => true, recompensa: { antrix: 10 } },
     { id: 'perfeito5', nome: 'Tomar no horário perfeito 5 vezes', titulo: 'Pontual', corTitulo: '#aaa', cond: (s) => s.tomadasHorarioPerfeito >= 5, recompensa: { antrix: 50 } },
     { id: 'perfeito10', nome: 'Tomar no horário perfeito 10 vezes', titulo: 'Cronômetro', corTitulo: '#aaa', cond: (s) => s.tomadasHorarioPerfeito >= 10, recompensa: { antrix: 100 } },
+  ],
+  // ⚠️ CONQUISTA SECRETA — não exibir nome real na UI, mostrar apenas '???' e cadeado
+  segredo: [
+    {
+      id: 'amor_64',
+      nome: '???',                          // nome real oculto na UI
+      nomeSecreto: 'Eu Te Amo 64 Meu Neném', // frase que o usuário deve digitar
+      titulo: 'Aquele Que Ama Mais',
+      corTitulo: '#000000',                  // preto
+      secreto: true,
+      cond: (s) => s.amor64 === true,        // ativado via input especial
+      recompensa: { antrix: 64 },
+    },
   ],
 };
 
@@ -586,10 +641,11 @@ Notifications.setNotificationHandler({
 
 // Círculo de consistência compacto — não ocupa a tela toda
 function ConsistencyCircle({ historico, dataInicio, tema }) {
-  const TOTAL = 28;
-  const SIZE  = 80; // diâmetro fixo pequeno
+  // Yazflex: cartela de 30 dias
+  const TOTAL = 30;
+  const SIZE  = 88;
   const R     = SIZE / 2;
-  const DOT   = 6;
+  const DOT   = 5;
   const hoje  = todayKey();
 
   const getDayKey = (idx) => {
@@ -599,13 +655,25 @@ function ConsistencyCircle({ historico, dataInicio, tema }) {
     return dateToKey(d);
   };
 
+  // Conta dias tomados no ciclo atual (a partir de dataInicio)
   const totalTomou = Object.values(historico).filter(e => e?.tomou).length;
+
+  // diasPassados = quantos dias já se passaram desde o início (máx 30)
   const diasPassados = (() => {
     if (!dataInicio) return 0;
-    const diff = Math.floor((new Date(hoje + 'T12:00:00') - new Date(dataInicio + 'T12:00:00')) / 86400000);
-    return Math.min(Math.max(diff + 1, 0), TOTAL);
+    const diff = Math.floor((new Date(hoje + 'T12:00:00') - new Date(dataInicio + 'T12:00:00')) / 86400000) + 1;
+    return Math.min(Math.max(diff, 0), TOTAL);
   })();
-  const consistencia = diasPassados > 0 ? Math.round((totalTomou / diasPassados) * 100) : 0;
+
+  // Dias tomados no horário certo (noHorarioCerto === true)
+  const diasCertos = Object.values(historico).filter(e => e?.tomou && e?.noHorarioCerto !== false).length;
+  // Dias perdidos = passou o dia mas não tomou
+  const diasPerdidos = Math.max(0, diasPassados - totalTomou);
+  // Dias errados = tomou mas fora do horário
+  const diasErrados = Math.max(0, totalTomou - diasCertos);
+
+  // % = dias certos / dias passados
+  const consistencia = diasPassados > 0 ? Math.round((diasCertos / diasPassados) * 100) : 0;
 
   const dots = Array.from({ length: TOTAL }, (_, i) => {
     const angle = ((i) / TOTAL) * 2 * Math.PI - Math.PI / 2;
@@ -622,7 +690,6 @@ function ConsistencyCircle({ historico, dataInicio, tema }) {
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-      {/* Círculo pequeno */}
       <View style={{ width: SIZE, height: SIZE, position: 'relative' }}>
         <View style={{ position: 'absolute', width: SIZE, height: SIZE, borderRadius: R, borderWidth: 1, borderColor: tema.border }} />
         {dots.map((d, i) => (
@@ -643,10 +710,11 @@ function ConsistencyCircle({ historico, dataInicio, tema }) {
           <Text style={{ color: tema.primary, fontSize: 11, fontWeight: '900' }}>{consistencia}%</Text>
         </View>
       </View>
-      {/* Info ao lado */}
       <View>
-        <Text style={{ color: tema.text, fontSize: 13, fontWeight: '700' }}>{totalTomou}/28 dias</Text>
+        <Text style={{ color: tema.text, fontSize: 13, fontWeight: '700' }}>{totalTomou}/30 dias</Text>
         <Text style={{ color: tema.sub, fontSize: 11, marginTop: 2 }}>consistência: {consistencia}%</Text>
+        {diasPerdidos > 0 && <Text style={{ color: '#ff4444', fontSize: 10, marginTop: 1 }}>❌ {diasPerdidos} perdido{diasPerdidos > 1 ? 's' : ''}</Text>}
+        {diasErrados > 0 && <Text style={{ color: '#ffd60a', fontSize: 10, marginTop: 1 }}>⚠️ {diasErrados} fora do horário</Text>}
       </View>
     </View>
   );
@@ -703,7 +771,11 @@ export default function App() {
   const [globalRanking, setGlobalRanking] = useState([]);
   const [loadingRanking, setLoadingRanking] = useState(false);
   const [modalRanking, setModalRanking] = useState(false);
-  const [modalSelo, setModalSelo] = useState(false);
+  const [modalLoja,   setModalLoja]   = useState(false);
+  const [modalSelo,   setModalSelo]   = useState(false);
+  const [inputAmor64, setInputAmor64] = useState('');
+  const tituloAnim = useRef(new Animated.Value(0)).current;
+  const tituloGlow = useRef(new Animated.Value(0)).current;
   const [modalMoldura, setModalMoldura] = useState(false);
   const [modalTitulo, setModalTitulo] = useState(false);
   const [otaInfo, setOtaInfo] = useState(null);
@@ -722,9 +794,18 @@ export default function App() {
   const [modalHorario, setModalHorario] = useState(false);
   const [horarioInput, setHorarioInput] = useState('20:30');
   const [modalConectar, setModalConectar] = useState(false);
+  const [modalRelatorio, setModalRelatorio] = useState(false);
+  const [relatorioAtual, setRelatorioAtual] = useState(null);
+  const [historicoRelatorios, setHistoricoRelatorios] = useState([]);
+  const [fcmToken, setFcmToken] = useState(null);
 
   const fadeAmor = useRef(new Animated.Value(0)).current;
   const pulseBtn = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const fadeTabAnim = useRef(new Animated.Value(1)).current;
+  const [abaAnterior, setAbaAnterior] = useState('home');
+  const [modalPerfilUsuario, setModalPerfilUsuario] = useState(false);
+  const [perfilUsuarioVisto, setPerfilUsuarioVisto] = useState(null);
   const [confete, setConfete] = useState(false);
 
   // 🆕 NOVO alpha 0.0.1: Countdown em segundos até a Janela de Ouro
@@ -760,24 +841,31 @@ export default function App() {
   }, []);
 
   // ── FIX SWIPE: 8 abas (removido 'conectar') ──
-  const ABAS = ['home', 'calendario', 'ranking', 'loja', 'conquistas', 'mural', 'sugestoes', 'perfil'];
+  const ABAS = ['home', 'calendario', 'ranking', 'conquistas', 'mural', 'sugestoes', 'perfil'];
 
   // ── FIX SWIPE: PanResponder usa ref para aba atual ──
+  function trocarAba(nova, direcao = 1) {
+    slideAnim.setValue(direcao * SW * 0.4);
+    fadeTabAnim.setValue(0.4);
+    abaAtivaRef.current = nova;
+    setAbaAtiva(nova);
+    Animated.parallel([
+      Animated.timing(slideAnim, { toValue: 0, duration: 220, useNativeDriver: true }),
+      Animated.timing(fadeTabAnim, { toValue: 1, duration: 220, useNativeDriver: true }),
+    ]).start();
+  }
+
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, g) =>
-        Math.abs(g.dx) > 20 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
+        Math.abs(g.dx) > 30 && Math.abs(g.dx) > Math.abs(g.dy) * 3,
       onPanResponderRelease: (_, g) => {
         const idx = ABAS.indexOf(abaAtivaRef.current);
-        if (g.dx < -50 && idx < ABAS.length - 1) {
-          const nova = ABAS[idx + 1];
-          abaAtivaRef.current = nova;
-          setAbaAtiva(nova);
-        } else if (g.dx > 50 && idx > 0) {
-          const nova = ABAS[idx - 1];
-          abaAtivaRef.current = nova;
-          setAbaAtiva(nova);
+        if (g.dx < -80 && idx < ABAS.length - 1) {
+          trocarAba(ABAS[idx + 1], 1);
+        } else if (g.dx > 80 && idx > 0) {
+          trocarAba(ABAS[idx - 1], -1);
         }
       },
     })
@@ -828,6 +916,16 @@ export default function App() {
     if (casalId) { iniciarListeners(casalId); return () => pararListeners(); }
   }, [casalId]);
 
+  // Animação leve contínua do título secreto (brilho pulsante ao redor)
+  useEffect(() => {
+    const glow = Animated.loop(Animated.sequence([
+      Animated.timing(tituloGlow, { toValue: 1, duration: 1400, useNativeDriver: true }),
+      Animated.timing(tituloGlow, { toValue: 0, duration: 1400, useNativeDriver: true }),
+    ]));
+    glow.start();
+    return () => glow.stop();
+  }, []);
+
   function resetEstado() {
     setHistorico({}); setPausa(null); setPontos({ ana: 0, harlley: 0 });
     setDataInicio(null); setFotos({}); setCasalId(null); setPerfil(null); setCasalConfig({});
@@ -869,6 +967,8 @@ export default function App() {
         const tSnap = await get(ref(db, `casais/${p.casalId}/tema`));
         if (tSnap.exists()) aplicarTema(tSnap.val());
         carregarMural(p.casalId);
+        // Registra token FCM assim que entra no app
+        setTimeout(() => registrarFcmToken(), 1500);
       } else {
         setTela('pair');
       }
@@ -903,7 +1003,15 @@ export default function App() {
         listenersRef.current.push({ r, unsub });
       });
       const cfgRef = ref(db, `casais/${cid}/config`);
-      const cfgUnsub = onValue(cfgRef, snap => { if (snap.exists()) setCasalConfig(snap.val()); });
+      const cfgUnsub = onValue(cfgRef, snap => {
+        if (snap.exists()) {
+          const cfg = snap.val();
+          setCasalConfig(cfg);
+          // Reagenda notificações automaticamente se horariosNotificacao mudar
+          // (ex: parceira salvou horário novo → app do parceiro reagenda na hora)
+          configurarAlarmes(cid);
+        }
+      });
       listenersRef.current.push({ r: cfgRef, unsub: cfgUnsub });
       const mRef = ref(db, `casais/${cid}/membros`);
       const mUnsub = onValue(mRef, snap => {
@@ -957,25 +1065,85 @@ export default function App() {
     } catch(e) { Alert.alert('Erro', 'Não foi possível salvar o tema.'); }
   }
 
+  // Registra FCM token no Firebase para receber push mesmo com app fechado
+  async function registrarFcmToken() {
+    try {
+      if (!Device.isDevice) return null;
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== 'granted') return null;
+      const tokenData = await Notifications.getExpoPushTokenAsync({
+        projectId: '5433fd20-8302-4bb6-9834-e6e6255d0d2b',
+      });
+      const token = tokenData.data;
+      setFcmToken(token);
+      if (authUser?.uid) {
+        await update(ref(db, `usuarios/${authUser.uid}`), { fcmToken: token });
+      }
+      return token;
+    } catch(e) { console.warn('FCM token error:', e); return null; }
+  }
+
+  // Envia push via FCM REST para um token específico
+  async function enviarPushFcm(toToken, titulo, corpo) {
+    if (!toToken) return;
+    try {
+      // Busca server key do Firebase (nunca no código!)
+      const keySnap = await get(ref(db, 'config/fcmServerKey'));
+      const serverKey = keySnap.exists() ? keySnap.val() : null;
+      if (!serverKey) { console.warn('FCM server key não encontrada em /config/fcmServerKey'); return; }
+      await fetch('https://fcm.googleapis.com/fcm/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `key=${serverKey}` },
+        body: JSON.stringify({
+          to: toToken,
+          notification: { title: titulo, body: corpo, sound: 'default' },
+          priority: 'high',
+        }),
+      });
+    } catch(e) { console.warn('Erro ao enviar FCM push:', e); }
+  }
+
+  // ── alpha 0.0.15: configurarAlarmes ──────────────────────────────────────────
+  // Lógica de notificação por casal:
+  //   · Cada mulher salva seu horário em /usuarios/{uid}/horarioPessoal
+  //   · Ao salvar/parear, horários das mulheres do casal vão pra
+  //     /casais/{cid}/config/horariosNotificacao (objeto { uid: "HH:MM", ... })
+  //   · configurarAlarmes lê esses horários e agenda uma notificação local
+  //     para CADA horário — todos os membros do casal recebem igual
+  //   · Homem não tem horário próprio: só recebe via casal
+  // ─────────────────────────────────────────────────────────────────────────────
   async function configurarAlarmes(cid) {
     try {
       if (!Device.isDevice) return;
       const { status } = await Notifications.requestPermissionsAsync();
       if (status !== 'granted') return;
       await Notifications.cancelAllScheduledNotificationsAsync();
-      const cfgSnap = await get(ref(db, `casais/${cid}/config/horarioPessoal/${authUser?.uid}`));
-      const horarioPessoal = cfgSnap.exists() ? cfgSnap.val() : null;
-      if (horarioPessoal) {
-        const [hP, mP] = horarioPessoal.split(':').map(Number);
+
+      // Busca todos os horários registrados no casal
+      const cfgSnap = await get(ref(db, `casais/${cid}/config/horariosNotificacao`));
+      const horariosObj = cfgSnap.exists() ? cfgSnap.val() : {};
+      // Deduplica horários (caso 2 mulheres tenham o mesmo)
+      const horarios = [...new Set(Object.values(horariosObj))].filter(h => /^\d{2}:\d{2}$/.test(h));
+
+      // Agenda uma notificação local para cada horário do casal
+      for (let i = 0; i < horarios.length; i++) {
+        const h = horarios[i];
+        const [hh, mm] = h.split(':').map(Number);
         await Notifications.scheduleNotificationAsync({
-          identifier: 'lembrete_pessoal',
-          content: { title: '💊 Seu horário!', body: `Hora de tomar a pílula (${horarioPessoal})`, sound: true },
-          trigger: { hour: hP, minute: mP, repeats: true },
+          identifier: `lembrete_casal_${i}`,
+          content: {
+            title: '💊 Hora do remédio, meu amor!',
+            body: `São ${h} — não esquece de tomar o Yazflex! 💕`,
+            sound: true,
+          },
+          trigger: { hour: hh, minute: mm, repeats: true },
         });
       }
+
+      // Janela de Ouro — para todos sempre
       await Notifications.scheduleNotificationAsync({
         identifier: 'janela_ouro',
-        content: { title: 'Hora da pílula! 💊', body: 'Ana, não esqueça de tomar o Yazflex hoje', sound: true },
+        content: { title: '🌟 Janela de Ouro aberta!', body: 'Tome o Yazflex agora! 20:30–20:40 💊💕', sound: true },
         trigger: { hour: JANELA_INICIO.h, minute: JANELA_INICIO.m, repeats: true },
       });
       await Notifications.scheduleNotificationAsync({
@@ -984,6 +1152,19 @@ export default function App() {
         trigger: { hour: JANELA_FIM.h, minute: JANELA_FIM.m - 5, repeats: true },
       });
     } catch(e) { console.warn("Erro notificações:", e); }
+  }
+
+  // Ao marcar a pílula: envia push FCM real pro parceiro
+  async function notificarParceiro(horaMarcado) {
+    if (!casalId || !parceiro) return;
+    try {
+      // Busca token FCM do parceiro
+      const parceiroSnap = await get(ref(db, `usuarios/${parceiro.uid}/fcmToken`));
+      const tokenParceiro = parceiroSnap.exists() ? parceiroSnap.val() : null;
+      const nomeMeu = perfil?.nome || 'Sua parceira';
+      // Push FCM real (chega mesmo com app fechado)
+      await enviarPushFcm(tokenParceiro, '💊 Pílula tomada!', `${nomeMeu} tomou o Yazflex às ${horaMarcado}! ✅💕`);
+    } catch(e) { console.warn('notificarParceiro error:', e); }
   }
 
   async function fazerLogin() {
@@ -1001,15 +1182,16 @@ export default function App() {
       const cred = await createUserWithEmailAndPassword(auth, authEmail.trim(), authSenha);
       await updateProfile(cred.user, { displayName: authNome.trim() });
       const isHarlley = authEmail.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
+      const conquistaBoasVindas = { desbloqueada: true, data: new Date().toISOString() };
       await set(ref(db, `usuarios/${cred.user.uid}`), {
         nome: authNome.trim(), email: authEmail.trim().toLowerCase(),
         isAdmin: isHarlley, casalId: null, genero: null,
         criadoEm: new Date().toISOString(),
-        antrix: 0, indPontos: 0, streak: 0,
+        antrix: 10, indPontos: 0, streak: 0,
         itensComprados: { temas: [], selos: [], molduras: [] },
         seloEquipado: null, molduraEquipada: null,
         titulosDesbloqueados: {}, tituloEquipado: null,
-        conquistas: {},
+        conquistas: { boas_vindas: conquistaBoasVindas },
         estatisticas: {
           rankPrimeiro: 0, rankPrimeiroConsecutivo: 0, antrixTotal: 0,
           totalTemasComprados: 0, totalTemasRarosComprados: 0, totalTemasLendariosComprados: 0,
@@ -1053,6 +1235,10 @@ export default function App() {
         await set(ref(db, `casais/${cid}/membros/${authUser.uid}`), perfil.nome);
         await set(ref(db, `usuarios/${authUser.uid}/casalId`), cid);
         await remove(ref(db, `pairCodes/${code}`));
+        // Se for mulher com horário salvo, copia para o casal agora
+        if (perfil?.genero === 'mulher' && perfil?.horarioPessoal) {
+          await update(ref(db, `casais/${cid}/config/horariosNotificacao`), { [authUser.uid]: perfil.horarioPessoal });
+        }
         setCasalId(cid); setTela('app'); setModalConectar(false);
       } else { Alert.alert('Erro', 'Chave não encontrada.'); }
     } catch(e) { Alert.alert('Erro', 'Falha ao entrar na dupla.'); }
@@ -1077,14 +1263,30 @@ export default function App() {
     } catch(e) { Alert.alert('Erro', 'Não foi possível salvar.'); }
   }
 
+  // ── alpha 0.0.15: salvarHorarioPessoal ───────────────────────────────────────
+  // Só mulher chega até aqui (botão bloqueado pra homem).
+  // 1. Salva em /usuarios/{uid}/horarioPessoal
+  // 2. Se pareada, copia para /casais/{cid}/config/horariosNotificacao/{uid}
+  //    → parceiro(s) recebem notificação no mesmo horário automaticamente
+  // ─────────────────────────────────────────────────────────────────────────────
   async function salvarHorarioPessoal() {
     const horario = horarioInput.trim();
     if (!/^\d{2}:\d{2}$/.test(horario)) { Alert.alert('Formato inválido', 'Use HH:MM — ex: 21:00'); return; }
     try {
-      await update(ref(db, `casais/${casalId}/config/horarioPessoal`), { [authUser.uid]: horario });
-      setCasalConfig(c => ({ ...c, horarioPessoal: { ...(c.horarioPessoal || {}), [authUser.uid]: horario } }));
-      setModalHorario(false); await configurarAlarmes(casalId);
-      Alert.alert('✅ Salvo', `Lembrete pessoal: ${horario}`);
+      // 1. Salva no perfil do usuário
+      await update(ref(db, `usuarios/${authUser.uid}`), { horarioPessoal: horario });
+      setPerfil(p => ({ ...p, horarioPessoal: horario }));
+      // 2. Se pareada, atualiza o nó do casal para todos receberem
+      if (casalId) {
+        await update(ref(db, `casais/${casalId}/config/horariosNotificacao`), { [authUser.uid]: horario });
+        setCasalConfig(c => ({
+          ...c,
+          horariosNotificacao: { ...(c.horariosNotificacao || {}), [authUser.uid]: horario }
+        }));
+        await configurarAlarmes(casalId);
+      }
+      setModalHorario(false);
+      Alert.alert('✅ Salvo', `Lembrete: ${horario}\nSeu parceiro também será notificado! 💕`);
     } catch(e) { Alert.alert('Erro', 'Falha ao salvar horário.'); }
   }
 
@@ -1127,6 +1329,33 @@ export default function App() {
         }
       }
     }
+  }
+
+  async function verificarAmor64(texto) {
+    const frase = texto.trim().toLowerCase();
+    const alvo  = 'eu te amo 64 meu neném';
+    if (frase !== alvo) return;
+    if (conquistasDesbloqueadas['amor_64']) {
+      Alert.alert('💖', 'Você já desbloqueou este título!');
+      return;
+    }
+    const novaConq = { desbloqueada: true, data: new Date().toISOString() };
+    setConquistasDesbloqueadas(prev => ({ ...prev, amor_64: novaConq }));
+    await update(ref(db, `usuarios/${authUser.uid}/conquistas/amor_64`), novaConq);
+    const novoTitulo = { titulo: 'Aquele Que Ama Mais', cor: '#000000' };
+    setTitulosDesbloqueados(prev => ({ ...prev, amor_64: novoTitulo }));
+    await update(ref(db, `usuarios/${authUser.uid}/titulosDesbloqueados/amor_64`), novoTitulo);
+    // Equipa automaticamente
+    setTituloEquipado('amor_64');
+    await update(ref(db, `usuarios/${authUser.uid}`), { tituloEquipado: 'amor_64', antrix: antrix + 64 });
+    setAntrix(a => a + 64);
+    // Animação de revelação
+    Animated.sequence([
+      Animated.timing(tituloAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+      Animated.delay(2000),
+      Animated.timing(tituloAnim, { toValue: 0, duration: 400, useNativeDriver: true }),
+    ]).start();
+    Alert.alert('🖤 Título Secreto Desbloqueado!', '"Aquele Que Ama Mais"\n\n+64 Antrix de bônus 💠');
   }
 
   async function comprarItem(itemId, preco, tipo, gratuito = false) {
@@ -1229,12 +1458,21 @@ export default function App() {
       const agora = new Date();
       const hora = agora.toTimeString().slice(0, 5);
       const naJanela = estaDentroJanela('20:30', 10, agora);
+      // Verifica se tomou no horário pessoal (tolerância 10min) — lê do perfil agora
+      const meuHorarioPessoal = perfil?.horarioPessoal || null;
+      const noHorarioCerto = meuHorarioPessoal
+        ? estaDentroJanela(meuHorarioPessoal, 10, agora)
+        : naJanela;
       const quemSouEu = (perfil?.nome || '').toLowerCase().includes('harlley') ? 'harlley' : 'ana';
       const np = { ...pontos };
       if (naJanela) np.ana = (np.ana || 0) + 1;
       else np[quemSouEu] = (np[quemSouEu] || 0) + 1;
       await set(ref(db, `casais/${casalId}/pontos`), np);
-      await set(ref(db, `casais/${casalId}/historico/${hoje}`), { data: hoje, hora, tomou: true, quemMarcou: authUser.uid });
+      await set(ref(db, `casais/${casalId}/historico/${hoje}`), {
+        data: hoje, hora, tomou: true, quemMarcou: authUser.uid,
+        noHorarioCerto,  // salva se foi no horário correto
+        naJanelaOuro: naJanela,
+      });
       const streakAtual = calcularStreakAtual();
       const { pontosGanhos, antrixGanho } = calcularRecompensa(streakAtual);
       const novoStreak = streakAtual + 1;
@@ -1256,6 +1494,7 @@ export default function App() {
         Animated.delay(2000),
         Animated.timing(fadeAmor, { toValue: 0, duration: 500, useNativeDriver: true }),
       ]).start(() => setModalAmor(false));
+      await notificarParceiro(hora);
       Alert.alert('✅ Tomou!', `+${pontosGanhos} pts, +${antrixGanho} Antrix! Streak: ${novoStreak}`);
     } catch(e) { Alert.alert('Erro', 'Falha ao registrar.'); }
   }
@@ -1275,6 +1514,88 @@ export default function App() {
       await set(ref(db, `casais/${casalId}/dataInicio`), dataStr);
       setModalInicio(false);
     } catch(e) {}
+  }
+
+  function gerarRelatorioMensal() {
+    // Monta relatório completo do ciclo atual
+    const entradasHist = Object.entries(historico);
+    const totalTomados = entradasHist.filter(([,v]) => v?.tomou).length;
+    const diasCertos = entradasHist.filter(([,v]) => v?.tomou && v?.noHorarioCerto !== false).length;
+    const diasErrados = totalTomados - diasCertos;
+    const diasOrdenados = entradasHist.filter(([,v]) => v?.tomou).map(([k,v]) => ({ data: k, hora: v.hora, certo: v?.noHorarioCerto !== false })).sort((a,b) => a.data.localeCompare(b.data));
+    const primeiroDia = diasOrdenados[0]?.data || dataInicio || '-';
+    const ultimoDia = diasOrdenados[diasOrdenados.length-1]?.data || '-';
+    const pausaInicio = pausa?.inicio || hoje;
+    const pausaFim = pausa?.fim || addDias(hoje, 4);
+    const retomadaEstimada = addDias(pausaFim, 1);
+    // Antrix e pontos ganhos no ciclo
+    const antrixGanhoTotal = diasOrdenados.reduce((acc, d) => {
+      const streakDia = 1; // simplificado
+      return acc + (d.certo ? 10 : 5);
+    }, 0);
+    return {
+      geradoEm: new Date().toISOString(),
+      cicloInicio: primeiroDia,
+      cicloFim: ultimoDia,
+      totalDiasTomados: totalTomados,
+      diasNoHorarioCerto: diasCertos,
+      diasForaDoHorario: diasErrados,
+      diasPerdidos: Math.max(0, Object.keys(historico).length > 0 ?
+        Math.floor((new Date(ultimoDia+'T12:00:00') - new Date(primeiroDia+'T12:00:00')) / 86400000) + 1 - totalTomados : 0),
+      diasTomados: diasOrdenados,
+      pausaInicio,
+      pausaFim,
+      retomadaEstimada,
+      antrixEstimado: antrixGanhoTotal,
+      pontos: indPontos,
+      streak,
+    };
+  }
+
+  async function abrirRelatorioMensal() {
+    // Carrega histórico de relatórios do Firebase
+    try {
+      const snap = await get(ref(db, `casais/${casalId}/relatoriosMensais`));
+      const lista = [];
+      if (snap.exists()) {
+        snap.forEach(child => lista.push({ id: child.key, ...child.val() }));
+        lista.sort((a,b) => b.geradoEm?.localeCompare(a.geradoEm));
+      }
+      setHistoricoRelatorios(lista);
+      // Mostra o relatório atual do ciclo em andamento
+      setRelatorioAtual(gerarRelatorioMensal());
+      setModalRelatorio(true);
+    } catch(e) { Alert.alert('Erro', 'Não foi possível carregar relatórios.'); }
+  }
+
+  async function analisarEIniciarPausa() {
+    if (!casalId) return;
+    const rel = gerarRelatorioMensal();
+    const msg = `⏸️ Iniciar pausa?
+
+📊 Ciclo atual:
+• ${rel.totalDiasTomados} dias tomados
+• ${rel.diasNoHorarioCerto} no horário certo
+• ${rel.diasForaDoHorario} fora do horário
+• ${rel.diasPerdidos} dias perdidos
+• Consistência: ${rel.totalDiasTomados > 0 ? Math.round(rel.diasNoHorarioCerto / Math.max(rel.totalDiasTomados + rel.diasPerdidos, 1) * 100) : 0}%
+
+Pausa: ${rel.pausaInicio} → ${rel.pausaFim}
+Retomada: ${rel.retomadaEstimada}
+
+O relatório será salvo no app.`;
+    Alert.alert('⏸️ Iniciar Pausa?', msg, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Iniciar Pausa', onPress: async () => {
+        await iniciarPausa();
+        try {
+          // Salva relatório completo no Firebase com timestamp único
+          const relKey = `rel_${Date.now()}`;
+          await set(ref(db, `casais/${casalId}/relatoriosMensais/${relKey}`), rel);
+        } catch(e) {}
+        Alert.alert('✅ Pausa iniciada!', `Duração: 4 dias.\nRetomada estimada: ${rel.retomadaEstimada}\nRelatório salvo no app!`);
+      }}
+    ]);
   }
 
   async function iniciarPausa() {
@@ -1301,6 +1622,22 @@ export default function App() {
       await set(msgRef, { texto: novaMensagem.trim(), usuario: perfil?.nome, timestamp: Date.now() });
       setNovaMensagem('');
     } catch(e) { Alert.alert('Erro', 'Falha ao enviar mensagem.'); }
+  }
+
+  async function deletarMensagem(msgId) {
+    try {
+      await remove(ref(db, `casais/${casalId}/mural/${msgId}`));
+    } catch(e) { Alert.alert('Erro', 'Falha ao deletar.'); }
+  }
+
+  async function adminLimparTodoMural() {
+    Alert.alert('🗑️ Limpar Mural', 'Apagar TODAS as mensagens?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Apagar tudo', style: 'destructive', onPress: async () => {
+        try { await remove(ref(db, `casais/${casalId}/mural`)); }
+        catch(e) { Alert.alert('Erro', 'Falha ao limpar mural.'); }
+      }}
+    ]);
   }
 
   async function carregarRankingGlobal() {
@@ -1380,7 +1717,12 @@ export default function App() {
   const pD         = pausa?.ativa ? Math.ceil((new Date(pausa.fim + 'T23:59:59') - new Date()) / 86400000) : null;
   const fotoAtual  = fotos[authUser?.uid];
   const nomeAtual  = perfil?.nome || 'Usuário';
-  const meuHorario = casalConfig?.horarioPessoal?.[authUser?.uid];
+  const ehMulher   = perfil?.genero === 'mulher';
+  // Horário que o usuário vê: mulher vê o próprio, homem vê o da parceira (se houver)
+  const horariosDoCalsal = casalConfig?.horariosNotificacao || {};
+  const meuHorario = ehMulher
+    ? (perfil?.horarioPessoal || null)
+    : (Object.values(horariosDoCalsal)[0] || null); // homem: pega o primeiro horário do casal
   const baixando   = otaProgress > 0 && otaProgress < 1;
 
   // ── RENDERS DE TELA ─────────────────────────────────────────────────────────
@@ -1436,12 +1778,13 @@ export default function App() {
   // ── TELA PRINCIPAL ──────────────────────────────────────────────────────────
   return (
     <View style={s.root}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={false} />
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent={true} />
 
       {/* Modal OTA */}
       <Modal transparent visible={modalOta} animationType="slide" onRequestClose={() => { if (!otaInfo?.forcarAtualizar) ignorarOta(); }}>
         <View style={s.modalWrap}><View style={s.modalCard}>
-          <Text style={s.modalTitulo}>🚀 v{otaInfo?.versao} disponível!</Text>
+          <Text style={s.modalTitulo}>🚀 Nova versão disponível!</Text>
+          <Text style={{ color: tema.sub, fontSize: 12, marginBottom: 4 }}>Versão atual: {VERSAO_ATUAL} → {otaInfo?.versao}</Text>
           <Text style={[s.authSub, { textAlign: 'left', marginBottom: 20 }]}>{otaInfo?.changelog || 'Novidades!'}</Text>
           {baixando && <View style={s.progressWrap}><View style={[s.progressBar, { width: `${Math.round(otaProgress * 100)}%` }]} /></View>}
           <TouchableOpacity style={[s.btnPrimary, baixando && { opacity: 0.6 }]} onPress={baixarOta} disabled={baixando}>
@@ -1485,6 +1828,215 @@ export default function App() {
       </Modal>
 
       {/* Modal Tema */}
+
+      {/* ── Modal Relatório Mensal ── */}
+      <Modal transparent visible={modalRelatorio} animationType="slide" onRequestClose={() => setModalRelatorio(false)}>
+        <View style={s.modalWrap}>
+          <View style={[s.modalCard, { maxHeight: '90%' }]}>
+            <Text style={s.modalTitulo}>📊 Relatório Mensal</Text>
+            <ScrollView style={{ maxHeight: 500 }}>
+              {/* Ciclo atual */}
+              {relatorioAtual && (
+                <View style={{ marginBottom: 16, padding: 12, backgroundColor: tema.card, borderRadius: 12, borderWidth: 1, borderColor: tema.primary }}>
+                  <Text style={{ color: tema.primary, fontWeight: '900', fontSize: 14, marginBottom: 8 }}>📅 Ciclo em andamento</Text>
+                  <Text style={{ color: tema.text, fontSize: 13 }}>Início: {relatorioAtual.cicloInicio}</Text>
+                  <Text style={{ color: tema.text, fontSize: 13 }}>Total tomados: {relatorioAtual.totalDiasTomados} dias</Text>
+                  <Text style={{ color: '#00ff87', fontSize: 13 }}>✅ No horário certo: {relatorioAtual.diasNoHorarioCerto}</Text>
+                  {relatorioAtual.diasForaDoHorario > 0 && <Text style={{ color: '#ffd60a', fontSize: 13 }}>⚠️ Fora do horário: {relatorioAtual.diasForaDoHorario}</Text>}
+                  {relatorioAtual.diasPerdidos > 0 && <Text style={{ color: '#ff4444', fontSize: 13 }}>❌ Dias perdidos: {relatorioAtual.diasPerdidos}</Text>}
+                  <Text style={{ color: tema.text, fontSize: 13, marginTop: 4 }}>Streak atual: {relatorioAtual.streak} 🔥</Text>
+                  <Text style={{ color: tema.text, fontSize: 13 }}>Pontos: {relatorioAtual.pontos}</Text>
+                  {relatorioAtual.diasTomados?.length > 0 && (
+                    <View style={{ marginTop: 8 }}>
+                      <Text style={{ color: tema.sub, fontSize: 11, marginBottom: 4 }}>Dias tomados:</Text>
+                      {relatorioAtual.diasTomados.map((d, i) => (
+                        <Text key={i} style={{ color: d.certo ? '#00ff87' : '#ffd60a', fontSize: 11 }}>
+                          {d.certo ? '✅' : '⚠️'} {d.data} às {d.hora}
+                        </Text>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              )}
+              {/* Histórico de relatórios anteriores */}
+              {historicoRelatorios.length > 0 && (
+                <View>
+                  <Text style={{ color: tema.sub, fontWeight: '700', fontSize: 13, marginBottom: 8 }}>📁 Ciclos anteriores</Text>
+                  {historicoRelatorios.map((rel, i) => (
+                    <View key={rel.id || i} style={{ marginBottom: 12, padding: 10, backgroundColor: tema.card, borderRadius: 10, borderWidth: 1, borderColor: tema.border }}>
+                      <Text style={{ color: tema.primary, fontWeight: '700', fontSize: 12 }}>Ciclo {i + 1} — {rel.cicloInicio} a {rel.cicloFim}</Text>
+                      <Text style={{ color: tema.text, fontSize: 12 }}>✅ {rel.diasNoHorarioCerto} certos · ⚠️ {rel.diasForaDoHorario} errados · ❌ {rel.diasPerdidos} perdidos</Text>
+                      <Text style={{ color: tema.sub, fontSize: 11 }}>Pausa: {rel.pausaInicio} → Retomada: {rel.retomadaEstimada}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+              {historicoRelatorios.length === 0 && !relatorioAtual?.totalDiasTomados && (
+                <Text style={s.authSub}>Nenhum dado ainda. Comece a tomar a pílula para gerar relatórios!</Text>
+              )}
+            </ScrollView>
+            <TouchableOpacity style={s.btnSecondary} onPress={() => setModalRelatorio(false)}>
+              <Text style={s.btnSecondaryTxt}>Fechar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Modal Perfil Usuário (Instagram style) ── */}
+      <Modal transparent visible={modalPerfilUsuario} animationType="slide" onRequestClose={() => setModalPerfilUsuario(false)}>
+        <View style={[s.modalWrap, { justifyContent: 'flex-end' }]}>
+          <View style={[s.modalCard, { borderTopLeftRadius: 24, borderTopRightRadius: 24, borderBottomLeftRadius: 0, borderBottomRightRadius: 0, paddingBottom: 40 }]}>
+            <TouchableOpacity style={{ alignSelf: 'flex-end', padding: 4, marginBottom: 8 }} onPress={() => setModalPerfilUsuario(false)}>
+              <Text style={{ color: tema.sub, fontSize: 18 }}>✕</Text>
+            </TouchableOpacity>
+            {perfilUsuarioVisto && <>
+              <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                {perfilUsuarioVisto.foto
+                  ? <Image source={{ uri: perfilUsuarioVisto.foto }} style={{ width: 90, height: 90, borderRadius: 45, borderWidth: 3, borderColor: tema.primary }} />
+                  : <View style={{ width: 90, height: 90, borderRadius: 45, backgroundColor: tema.card, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: tema.primary }}><Text style={{ fontSize: 40 }}>👤</Text></View>
+                }
+                {perfilUsuarioVisto.selo && (
+                  <View style={{ marginTop: -16, backgroundColor: '#000a', borderRadius: 14, padding: 3, alignSelf: 'center' }}>
+                    <Text style={{ fontSize: 20 }}>{ITENS_LOJA.selos.comum.concat(ITENS_LOJA.selos.raro, ITENS_LOJA.selos.lendario).find(s => s.id === perfilUsuarioVisto.selo)?.emoji || '✨'}</Text>
+                  </View>
+                )}
+                <Text style={[s.perfilNome, { marginTop: 8 }]}>{perfilUsuarioVisto.nome}</Text>
+                {perfilUsuarioVisto.titulo && (
+                  <Text style={{ fontSize: 13, color: perfilUsuarioVisto.titulo.cor || tema.primary, marginTop: 4 }}>{perfilUsuarioVisto.titulo.titulo}</Text>
+                )}
+                {perfilUsuarioVisto.moldura && (
+                  <Text style={{ color: tema.sub, fontSize: 12, marginTop: 4 }}>🖼️ {[...ITENS_LOJA.molduras.comum, ...ITENS_LOJA.molduras.raro, ...ITENS_LOJA.molduras.lendario].find(m => m.id === perfilUsuarioVisto.moldura)?.nome || 'Moldura'}</Text>
+                )}
+              </View>
+              <View style={[s.statsRow, { marginTop: 0 }]}>
+                <View style={s.statItem}><Text style={s.statValue}>{perfilUsuarioVisto.pontos}</Text><Text style={s.statLabel}>Pontos</Text></View>
+                <View style={s.statItem}><Text style={s.statValue}>{perfilUsuarioVisto.streak} 🔥</Text><Text style={s.statLabel}>Streak</Text></View>
+                <View style={s.statItem}><Text style={s.statValue}>{perfilUsuarioVisto.antrix} 💠</Text><Text style={s.statLabel}>Antrix</Text></View>
+              </View>
+            </>}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Modal Loja ── */}
+      <Modal transparent visible={modalLoja} animationType="slide">
+        <View style={s.modalWrap}>
+          <ScrollView>
+            <View style={s.modalCard}>
+              <Text style={s.modalTitulo}>🛒 Loja</Text>
+              <Text style={[s.statsInfo, { marginBottom: 16 }]}>Seus Antrix: {antrix} 💠</Text>
+
+              <Text style={s.catTitulo}>🎨 Temas Comuns — 20 💠</Text>
+              <View style={s.lojaGrid}>
+                {ITENS_LOJA.temas.comum.map(item => (
+                  <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.temas.includes(item.id) && s.lojaItemOwned]} onPress={() => comprarItem(item.id, item.preco, 'temas')} disabled={itensComprados.temas.includes(item.id)}>
+                    <View style={[s.corTema, { backgroundColor: item.cor }]} />
+                    <Text style={s.lojaNome}>{item.nome}</Text>
+                    <Text style={s.lojaPreco}>{itensComprados.temas.includes(item.id) ? '✓' : `${item.preco} 💠`}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={s.catTitulo}>💎 Temas Raros — 80 💠</Text>
+              <View style={s.lojaGrid}>
+                {ITENS_LOJA.temas.raro.map(item => (
+                  <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.temas.includes(item.id) && s.lojaItemOwned]} onPress={() => comprarItem(item.id, item.preco, 'temas')} disabled={itensComprados.temas.includes(item.id)}>
+                    <View style={[s.corTema, { backgroundColor: item.cor }]} />
+                    <Text style={s.lojaNome}>{item.nome}</Text>
+                    <Text style={s.lojaPreco}>{itensComprados.temas.includes(item.id) ? '✓' : `${item.preco} 💠`}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={s.catTitulo}>✨ Temas Bonitos — 200 💠</Text>
+              <View style={s.lojaGrid}>
+                {ITENS_LOJA.temas.bonito.map(item => (
+                  <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.temas.includes(item.id) && s.lojaItemOwned]} onPress={() => comprarItem(item.id, item.preco, 'temas')} disabled={itensComprados.temas.includes(item.id)}>
+                    <View style={[s.corTema, { backgroundColor: item.cor }]} />
+                    <Text style={s.lojaNome}>{item.nome}</Text>
+                    <Text style={s.lojaPreco}>{itensComprados.temas.includes(item.id) ? '✓' : `${item.preco} 💠`}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={s.catTitulo}>🏆 Temas Lendários — 500 💠</Text>
+              <View style={s.lojaGrid}>
+                {ITENS_LOJA.temas.lendario.map(item => (
+                  <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.temas.includes(item.id) && s.lojaItemOwned]} onPress={() => comprarItem(item.id, item.preco, 'temas')} disabled={itensComprados.temas.includes(item.id)}>
+                    <View style={[s.corTema, { backgroundColor: item.cor }]} />
+                    <Text style={s.lojaNome}>{item.nome}</Text>
+                    <Text style={s.lojaPreco}>{itensComprados.temas.includes(item.id) ? '✓' : `${item.preco} 💠`}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={s.catTitulo}>🟢 Selos Comuns — 15 💠</Text>
+              <View style={s.lojaGrid}>
+                {ITENS_LOJA.selos.comum.map(item => (
+                  <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.selos.includes(item.id) && s.lojaItemOwned]} onPress={() => comprarItem(item.id, item.preco, 'selos')} disabled={itensComprados.selos.includes(item.id)}>
+                    <Text style={{ fontSize: 28, marginBottom: 4 }}>{item.emoji}</Text>
+                    <Text style={s.lojaNome}>{item.nome}</Text>
+                    <Text style={s.lojaPreco}>{itensComprados.selos.includes(item.id) ? '✓' : `${item.preco} 💠`}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={s.catTitulo}>🔵 Selos Raros — 60 💠</Text>
+              <View style={s.lojaGrid}>
+                {ITENS_LOJA.selos.raro.map(item => (
+                  <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.selos.includes(item.id) && s.lojaItemOwned]} onPress={() => comprarItem(item.id, item.preco, 'selos')} disabled={itensComprados.selos.includes(item.id)}>
+                    <Text style={{ fontSize: 28, marginBottom: 4 }}>{item.emoji}</Text>
+                    <Text style={s.lojaNome}>{item.nome}</Text>
+                    <Text style={s.lojaPreco}>{itensComprados.selos.includes(item.id) ? '✓' : `${item.preco} 💠`}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={s.catTitulo}>🟣 Selos Lendários — 300 💠</Text>
+              <View style={s.lojaGrid}>
+                {ITENS_LOJA.selos.lendario.map(item => (
+                  <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.selos.includes(item.id) && s.lojaItemOwned]} onPress={() => comprarItem(item.id, item.preco, 'selos')} disabled={itensComprados.selos.includes(item.id)}>
+                    <Text style={{ fontSize: 28, marginBottom: 4 }}>{item.emoji}</Text>
+                    <Text style={s.lojaNome}>{item.nome}</Text>
+                    <Text style={s.lojaPreco}>{itensComprados.selos.includes(item.id) ? '✓' : `${item.preco} 💠`}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={s.catTitulo}>🖼️ Molduras Comuns — 20 💠</Text>
+              <View style={s.lojaGrid}>
+                {ITENS_LOJA.molduras.comum.map(item => (
+                  <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.molduras.includes(item.id) && s.lojaItemOwned]} onPress={() => comprarItem(item.id, item.preco, 'molduras')} disabled={itensComprados.molduras.includes(item.id)}>
+                    <View style={[s.corTema, { backgroundColor: item.cor !== 'rainbow' ? item.cor : '#ffaa44' }]} />
+                    <Text style={s.lojaNome}>{item.nome}</Text>
+                    <Text style={s.lojaPreco}>{itensComprados.molduras.includes(item.id) ? '✓' : `${item.preco} 💠`}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={s.catTitulo}>✨ Molduras Raras — 80 💠</Text>
+              <View style={s.lojaGrid}>
+                {ITENS_LOJA.molduras.raro.map(item => (
+                  <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.molduras.includes(item.id) && s.lojaItemOwned]} onPress={() => comprarItem(item.id, item.preco, 'molduras')} disabled={itensComprados.molduras.includes(item.id)}>
+                    <View style={[s.corTema, { backgroundColor: item.cor !== 'rainbow' ? item.cor : '#ffaa44' }]} />
+                    <Text style={s.lojaNome}>{item.nome}</Text>
+                    <Text style={s.lojaPreco}>{itensComprados.molduras.includes(item.id) ? '✓' : `${item.preco} 💠`}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={s.catTitulo}>🌟 Molduras Lendárias — 300 💠</Text>
+              <View style={s.lojaGrid}>
+                {ITENS_LOJA.molduras.lendario.map(item => (
+                  <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.molduras.includes(item.id) && s.lojaItemOwned]} onPress={() => comprarItem(item.id, item.preco, 'molduras')} disabled={itensComprados.molduras.includes(item.id)}>
+                    <View style={[s.corTema, { backgroundColor: item.cor !== 'rainbow' ? item.cor : '#ffaa44' }]} />
+                    <Text style={s.lojaNome}>{item.nome}</Text>
+                    <Text style={s.lojaPreco}>{itensComprados.molduras.includes(item.id) ? '✓' : `${item.preco} 💠`}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <TouchableOpacity style={[s.btnPrimary, { marginTop: 16 }]} onPress={() => setModalLoja(false)}>
+                <Text style={s.btnPrimaryTxt}>Fechar loja</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+
       <Modal transparent visible={modalTema} animationType="slide">
         <View style={s.modalWrap}><View style={s.modalCard}>
           <Text style={s.modalTitulo}>🎨 Escolher tema</Text>
@@ -1696,6 +2248,7 @@ export default function App() {
         </View>
       </View>
 
+      <Animated.View style={{ flex: 1, transform: [{ translateX: slideAnim }], opacity: fadeTabAnim }}>
       <ScrollView style={s.body} contentContainerStyle={s.bodyContent} {...panResponder.panHandlers}>
 
         {/* HOME */}
@@ -1704,6 +2257,21 @@ export default function App() {
           <View style={[s.countdownBar, naJanela && { backgroundColor: '#00ff8722', borderColor: '#00ff87' }]}>
             <Text style={[s.countdownTxt, naJanela && { color: '#00ff87', fontWeight: '900' }]}>{countdown}</Text>
           </View>
+
+          {/* alpha 0.0.15: aviso para mulher sem horário definido */}
+          {ehMulher && !meuHorario && (
+            <TouchableOpacity
+              style={{ backgroundColor: '#ff2d7822', borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: tema.primary, flexDirection: 'row', alignItems: 'center' }}
+              onPress={() => { setHorarioInput('20:30'); setModalHorario(true); }}
+            >
+              <Text style={{ fontSize: 20, marginRight: 10 }}>⏰</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>Coloque seu horário pessoal</Text>
+                <Text style={{ color: tema.sub, fontSize: 11, marginTop: 2 }}>Toque aqui para definir e receber lembretes diários 💊</Text>
+              </View>
+              <Text style={{ color: tema.primary, fontSize: 18 }}>›</Text>
+            </TouchableOpacity>
+          )}
 
           {pD > 0 ? (
             <View style={[s.card, { borderColor: '#ffd60a' }]}>
@@ -1721,7 +2289,6 @@ export default function App() {
             </View>
             {!tomouHoje && (
               <Animated.View style={{ transform: [{ scale: pulseBtn }] }}>
-                {/* 🆕 NOVO alpha 0.0.1: Botão fica verde quando janela aberta */}
                 <TouchableOpacity
                   style={[s.btnPrimary, naJanela && { backgroundColor: '#00cc66' }]}
                   onPress={marcarTomou}
@@ -1729,6 +2296,16 @@ export default function App() {
                   <Text style={s.btnPrimaryTxt}>{naJanela ? '🟢 Marcar agora — Janela aberta!' : '💊 Marcar agora'}</Text>
                 </TouchableOpacity>
               </Animated.View>
+            )}
+            {!pausa?.ativa && (
+              <TouchableOpacity style={[s.btnSecondary, { marginTop: 8, borderColor: '#ffd60a' }]} onPress={analisarEIniciarPausa}>
+                <Text style={[s.btnSecondaryTxt, { color: '#ffd60a' }]}>⏸️ Iniciar pausa</Text>
+              </TouchableOpacity>
+            )}
+            {pausa?.ativa && (
+              <TouchableOpacity style={[s.btnSecondary, { marginTop: 8, borderColor: '#ff4444' }]} onPress={despausar}>
+                <Text style={[s.btnSecondaryTxt, { color: '#ff4444' }]}>▶️ Encerrar pausa</Text>
+              </TouchableOpacity>
             )}
           </>}
         </>}
@@ -1745,141 +2322,104 @@ export default function App() {
             {(() => {
               const start = new Date(calAno, calMes, 1).getDay();
               const days = diasNoMes(calMes, calAno); const cells = [];
+              const hojeDate = new Date(); const hojeAno = hojeDate.getFullYear(); const hojeMes = hojeDate.getMonth(); const hojeDia = hojeDate.getDate();
+              // Calcular dias de pausa para destacar
+              const pausaDias = new Set();
+              if (pausa?.inicio && pausa?.fim) {
+                let cur = new Date(pausa.inicio + 'T12:00:00');
+                const fim = new Date(pausa.fim + 'T12:00:00');
+                while (cur <= fim) {
+                  pausaDias.add(cur.toISOString().slice(0,10));
+                  cur.setDate(cur.getDate() + 1);
+                }
+              }
               for (let i = 0; i < start; i++) cells.push(<View key={'e' + i} style={s.calCelVazia} />);
               for (let d = 1; d <= days; d++) {
                 const key = `${calAno}-${String(calMes + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                 const tomou = !!historico[key];
+                const ehHoje = calAno === hojeAno && calMes === hojeMes && d === hojeDia;
+                const ehPausa = pausaDias.has(key);
                 cells.push(
-                  <TouchableOpacity key={key} style={[s.calCel, tomou && { backgroundColor: tema.primary + '44' }]} onPress={() => adminToggleDia(key)}>
-                    <Text style={[s.calDiaNum, tomou && { color: tema.primary }]}>{d}</Text>
+                  <TouchableOpacity key={key} style={[s.calCel,
+                    tomou && { backgroundColor: tema.primary + '44' },
+                    ehHoje && { borderWidth: 2, borderColor: tema.primary },
+                    ehPausa && !tomou && { backgroundColor: '#ffd60a22' }
+                  ]} onPress={() => adminToggleDia(key)}>
+                    <Text style={[s.calDiaNum, tomou && { color: tema.primary }, ehHoje && { fontWeight: '900', color: tema.primary }, ehPausa && !tomou && { color: '#ffd60a' }]}>{d}</Text>
+                    {ehPausa && <Text style={{ fontSize: 8, color: '#ffd60a' }}>⏸</Text>}
                   </TouchableOpacity>
                 );
               }
               return cells;
             })()}
           </View>
+          {/* Legenda calendário */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 8, gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><View style={{ width: 12, height: 12, backgroundColor: tema.primary + '44', borderRadius: 3 }}/><Text style={{ color: tema.sub, fontSize: 11 }}>Tomou</Text></View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><View style={{ width: 12, height: 12, borderWidth: 2, borderColor: tema.primary, borderRadius: 3 }}/><Text style={{ color: tema.sub, fontSize: 11 }}>Hoje</Text></View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><View style={{ width: 12, height: 12, backgroundColor: '#ffd60a22', borderRadius: 3 }}/><Text style={{ color: tema.sub, fontSize: 11 }}>⏸ Pausa</Text></View>
+          </View>
         </>}
 
         {/* RANKING */}
         {abaAtiva === 'ranking' && <>
           <Text style={s.secLabel}>🏆 Ranking da dupla</Text>
-          <View style={[s.rankCard, { borderLeftWidth: 4, borderLeftColor: tema.primary }]}>
-            <View><Text style={s.rankNome}>Ana 👩</Text><Text style={{ color: tema.sub, fontSize: 12 }}>Janela de Ouro (20:30–20:40)</Text></View>
-            <Text style={s.rankPts}>{pontos.ana || 0} pts</Text>
-          </View>
-          <View style={[s.rankCard, { borderLeftWidth: 4, borderLeftColor: tema.accent }]}>
-            <View><Text style={s.rankNome}>Harlley 👨</Text><Text style={{ color: tema.sub, fontSize: 12 }}>Fora da janela / parceiro</Text></View>
-            <Text style={[s.rankPts, { color: tema.accent }]}>{pontos.harlley || 0} pts</Text>
-          </View>
-          <Text style={[s.authSub, { marginTop: 16, textAlign: 'left', color: tema.sub }]}>💡 Ana ganha pontos ao marcar dentro da Janela de Ouro. Fora da janela, quem marcou leva o ponto.</Text>
+          {/* Card - Eu */}
+          <TouchableOpacity style={[s.rankCard, { borderLeftWidth: 4, borderLeftColor: tema.primary }]} onPress={() => { setPerfilUsuarioVisto({ uid: authUser?.uid, nome: nomeAtual, foto: fotos[authUser?.uid], selo: seloEquipado, moldura: molduraEquipada, titulo: tituloEquipado ? titulosDesbloqueados[tituloEquipado] : null, pontos: indPontos, streak, antrix }); setModalPerfilUsuario(true); }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              {fotos[authUser?.uid]
+                ? <View style={{ position: 'relative' }}>
+                    <Image source={{ uri: fotos[authUser?.uid] }} style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: tema.primary }} />
+                    {seloEquipado && <View style={{ position: 'absolute', bottom: -2, right: -2, backgroundColor: '#000a', borderRadius: 10, padding: 1 }}><Text style={{ fontSize: 12 }}>{ITENS_LOJA.selos.comum.concat(ITENS_LOJA.selos.raro, ITENS_LOJA.selos.lendario).find(s => s.id === seloEquipado)?.emoji || '✨'}</Text></View>}
+                  </View>
+                : <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: tema.card, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: tema.primary }}><Text style={{ fontSize: 20 }}>👤</Text></View>
+              }
+              <View style={{ flex: 1 }}>
+                <Text style={s.rankNome}>{nomeAtual} {perfil?.genero === 'mulher' ? '👩' : '👨'} <Text style={{ color: tema.sub, fontSize: 11 }}>(você)</Text></Text>
+                {tituloEquipado && titulosDesbloqueados[tituloEquipado] && <Text style={{ fontSize: 11, color: titulosDesbloqueados[tituloEquipado].cor }}>{titulosDesbloqueados[tituloEquipado].titulo}</Text>}
+                <Text style={{ color: tema.sub, fontSize: 11 }}>Streak: {streak} 🔥 · {antrix} 💠</Text>
+              </View>
+            </View>
+            <Text style={s.rankPts}>{indPontos} pts</Text>
+          </TouchableOpacity>
+          {/* Card - Parceiro (só se pareado) */}
+          {parceiro ? (
+            <TouchableOpacity style={[s.rankCard, { borderLeftWidth: 4, borderLeftColor: tema.accent }]} onPress={async () => {
+              try {
+                const snap = await get(ref(db, `usuarios/${parceiro.uid}`));
+                if (snap.exists()) {
+                  const p = snap.val();
+                  setPerfilUsuarioVisto({ uid: parceiro.uid, nome: p.nome, foto: fotos[parceiro.uid], selo: p.seloEquipado, moldura: p.molduraEquipada, titulo: p.tituloEquipado ? p.titulosDesbloqueados?.[p.tituloEquipado] : null, pontos: p.indPontos || 0, streak: p.streak || 0, antrix: p.antrix || 0 });
+                  setModalPerfilUsuario(true);
+                }
+              } catch(e) {}
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                {fotos[parceiro.uid]
+                  ? <View style={{ position: 'relative' }}>
+                      <Image source={{ uri: fotos[parceiro.uid] }} style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: tema.accent }} />
+                    </View>
+                  : <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: tema.card, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: tema.accent }}><Text style={{ fontSize: 20 }}>👤</Text></View>
+                }
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.rankNome, { color: tema.accent }]}>{parceiro.nome} 💞</Text>
+                  <Text style={{ color: tema.sub, fontSize: 11 }}>Toque para ver perfil</Text>
+                </View>
+              </View>
+              <Text style={[s.rankPts, { color: tema.accent }]}>? pts</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={[s.rankCard, { borderLeftWidth: 4, borderLeftColor: '#444', opacity: 0.5 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 20 }}>❓</Text></View>
+                <View><Text style={[s.rankNome, { color: '#666' }]}>Sem parceiro(a)</Text><Text style={{ color: '#555', fontSize: 11 }}>Conecte-se a uma dupla</Text></View>
+              </View>
+            </View>
+          )}
+          <Text style={[s.authSub, { marginTop: 16, textAlign: 'left', color: tema.sub }]}>💡 Toque nos cards para ver o perfil completo.</Text>
         </>}
 
         {/* LOJA */}
-        {abaAtiva === 'loja' && <>
-          <Text style={s.secLabel}>🛒 LOJA</Text>
-          <Text style={s.statsInfo}>Seus Antrix: {antrix} 💠</Text>
-          <Text style={s.catTitulo}>🎨 Temas Comuns — 20 💠</Text>
-          <View style={s.lojaGrid}>
-            {ITENS_LOJA.temas.comum.map(item => (
-              <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.temas.includes(item.id) && s.lojaItemOwned]} onPress={() => comprarItem(item.id, item.preco, 'temas')} disabled={itensComprados.temas.includes(item.id)}>
-                <View style={[s.corTema, { backgroundColor: item.cor }]} />
-                <Text style={s.lojaNome}>{item.nome}</Text>
-                <Text style={s.lojaPreco}>{itensComprados.temas.includes(item.id) ? '✓' : `${item.preco} 💠`}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <Text style={s.catTitulo}>💎 Temas Raros — 80 💠</Text>
-          <View style={s.lojaGrid}>
-            {ITENS_LOJA.temas.raro.map(item => (
-              <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.temas.includes(item.id) && s.lojaItemOwned]} onPress={() => comprarItem(item.id, item.preco, 'temas')} disabled={itensComprados.temas.includes(item.id)}>
-                <View style={[s.corTema, { backgroundColor: item.cor }]} />
-                <Text style={s.lojaNome}>{item.nome}</Text>
-                <Text style={s.lojaPreco}>{itensComprados.temas.includes(item.id) ? '✓' : `${item.preco} 💠`}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <Text style={s.catTitulo}>✨ Temas Bonitos — 200 💠</Text>
-          <View style={s.lojaGrid}>
-            {ITENS_LOJA.temas.bonito.map(item => (
-              <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.temas.includes(item.id) && s.lojaItemOwned]} onPress={() => comprarItem(item.id, item.preco, 'temas')} disabled={itensComprados.temas.includes(item.id)}>
-                <View style={[s.corTema, { backgroundColor: item.cor }]} />
-                <Text style={s.lojaNome}>{item.nome}</Text>
-                <Text style={s.lojaPreco}>{itensComprados.temas.includes(item.id) ? '✓' : `${item.preco} 💠`}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <Text style={s.catTitulo}>🏆 Temas Lendários — 500 💠</Text>
-          <View style={s.lojaGrid}>
-            {ITENS_LOJA.temas.lendario.map(item => (
-              <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.temas.includes(item.id) && s.lojaItemOwned]} onPress={() => comprarItem(item.id, item.preco, 'temas')} disabled={itensComprados.temas.includes(item.id)}>
-                <View style={[s.corTema, { backgroundColor: item.cor }]} />
-                <Text style={s.lojaNome}>{item.nome}</Text>
-                <Text style={s.lojaPreco}>{itensComprados.temas.includes(item.id) ? '✓' : `${item.preco} 💠`}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <Text style={s.catTitulo}>🟢 Selos Comuns — 15 💠</Text>
-          <View style={s.lojaGrid}>
-            {ITENS_LOJA.selos.comum.map(item => (
-              <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.selos.includes(item.id) && s.lojaItemOwned]} onPress={() => comprarItem(item.id, item.preco, 'selos')} disabled={itensComprados.selos.includes(item.id)}>
-                <Text style={{ fontSize: 28, marginBottom: 4 }}>{item.emoji}</Text>
-                <Text style={s.lojaNome}>{item.nome}</Text>
-                <Text style={s.lojaPreco}>{itensComprados.selos.includes(item.id) ? '✓' : `${item.preco} 💠`}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <Text style={s.catTitulo}>🔵 Selos Raros — 60 💠</Text>
-          <View style={s.lojaGrid}>
-            {ITENS_LOJA.selos.raro.map(item => (
-              <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.selos.includes(item.id) && s.lojaItemOwned]} onPress={() => comprarItem(item.id, item.preco, 'selos')} disabled={itensComprados.selos.includes(item.id)}>
-                <Text style={{ fontSize: 28, marginBottom: 4 }}>{item.emoji}</Text>
-                <Text style={s.lojaNome}>{item.nome}</Text>
-                <Text style={s.lojaPreco}>{itensComprados.selos.includes(item.id) ? '✓' : `${item.preco} 💠`}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <Text style={s.catTitulo}>🟣 Selos Lendários — 300 💠</Text>
-          <View style={s.lojaGrid}>
-            {ITENS_LOJA.selos.lendario.map(item => (
-              <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.selos.includes(item.id) && s.lojaItemOwned]} onPress={() => comprarItem(item.id, item.preco, 'selos')} disabled={itensComprados.selos.includes(item.id)}>
-                <Text style={{ fontSize: 28, marginBottom: 4 }}>{item.emoji}</Text>
-                <Text style={s.lojaNome}>{item.nome}</Text>
-                <Text style={s.lojaPreco}>{itensComprados.selos.includes(item.id) ? '✓' : `${item.preco} 💠`}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <Text style={s.catTitulo}>🖼️ Molduras Comuns — 20 💠</Text>
-          <View style={s.lojaGrid}>
-            {ITENS_LOJA.molduras.comum.map(item => (
-              <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.molduras.includes(item.id) && s.lojaItemOwned]} onPress={() => comprarItem(item.id, item.preco, 'molduras')} disabled={itensComprados.molduras.includes(item.id)}>
-                <View style={[s.corTema, { backgroundColor: item.cor !== 'rainbow' ? item.cor : '#ffaa44' }]} />
-                <Text style={s.lojaNome}>{item.nome}</Text>
-                <Text style={s.lojaPreco}>{itensComprados.molduras.includes(item.id) ? '✓' : `${item.preco} 💠`}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <Text style={s.catTitulo}>✨ Molduras Raras — 80 💠</Text>
-          <View style={s.lojaGrid}>
-            {ITENS_LOJA.molduras.raro.map(item => (
-              <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.molduras.includes(item.id) && s.lojaItemOwned]} onPress={() => comprarItem(item.id, item.preco, 'molduras')} disabled={itensComprados.molduras.includes(item.id)}>
-                <View style={[s.corTema, { backgroundColor: item.cor !== 'rainbow' ? item.cor : '#ffaa44' }]} />
-                <Text style={s.lojaNome}>{item.nome}</Text>
-                <Text style={s.lojaPreco}>{itensComprados.molduras.includes(item.id) ? '✓' : `${item.preco} 💠`}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <Text style={s.catTitulo}>🌟 Molduras Lendárias — 300 💠</Text>
-          <View style={s.lojaGrid}>
-            {ITENS_LOJA.molduras.lendario.map(item => (
-              <TouchableOpacity key={item.id} style={[s.lojaItem, itensComprados.molduras.includes(item.id) && s.lojaItemOwned]} onPress={() => comprarItem(item.id, item.preco, 'molduras')} disabled={itensComprados.molduras.includes(item.id)}>
-                <View style={[s.corTema, { backgroundColor: item.cor !== 'rainbow' ? item.cor : '#ffaa44' }]} />
-                <Text style={s.lojaNome}>{item.nome}</Text>
-                <Text style={s.lojaPreco}>{itensComprados.molduras.includes(item.id) ? '✓' : `${item.preco} 💠`}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </>}
-
         {/* CONQUISTAS */}
         {abaAtiva === 'conquistas' && <>
           <Text style={s.secLabel}>🏅 CONQUISTAS</Text>
@@ -1905,12 +2445,24 @@ export default function App() {
           <Text style={[s.authSub, { textAlign: 'left', color: tema.sub, marginBottom: 8 }]}>Mensagens das últimas 24h</Text>
           {mensagensMural.length === 0 && <Text style={s.authSub}>Nenhuma mensagem ainda. Deixe um recado!</Text>}
           {mensagensMural.map(item => (
-            <View key={item.id} style={s.mensagemItem}>
-              <Text style={s.mensagemUsuario}>{item.usuario}</Text>
-              <Text style={s.mensagemTexto}>{item.texto}</Text>
-              <Text style={s.mensagemData}>{new Date(item.timestamp).toLocaleString()}</Text>
+            <View key={item.id} style={[s.mensagemItem, { flexDirection: 'row', alignItems: 'flex-start' }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.mensagemUsuario}>{item.usuario}</Text>
+                <Text style={s.mensagemTexto}>{item.texto}</Text>
+                <Text style={s.mensagemData}>{new Date(item.timestamp).toLocaleString()}</Text>
+              </View>
+              {isAdmin && (
+                <TouchableOpacity onPress={() => deletarMensagem(item.id)} style={{ padding: 6, opacity: 0.6 }}>
+                  <Text style={{ fontSize: 16 }}>🗑️</Text>
+                </TouchableOpacity>
+              )}
             </View>
           ))}
+          {isAdmin && mensagensMural.length > 0 && (
+            <TouchableOpacity style={[s.btnSecondary, { borderColor: '#ff4444', marginTop: 4 }]} onPress={adminLimparTodoMural}>
+              <Text style={[s.btnSecondaryTxt, { color: '#ff4444' }]}>🗑️ Limpar todo o mural</Text>
+            </TouchableOpacity>
+          )}
           <TextInput style={[s.input, { marginTop: 10 }]} placeholder="Escreva uma mensagem de amor..." placeholderTextColor="#555" value={novaMensagem} onChangeText={setNovaMensagem} multiline />
           <TouchableOpacity style={s.btnPrimary} onPress={enviarMensagem}><Text style={s.btnPrimaryTxt}>💌 Enviar mensagem</Text></TouchableOpacity>
         </>}
@@ -1952,38 +2504,104 @@ export default function App() {
             </View>
           </View>
 
-          {/* Customização */}
-          <Text style={[s.catTitulo, { marginTop: 16 }]}>🎮 Customização</Text>
-          <TouchableOpacity style={s.adminBtn} onPress={() => setModalSelo(true)}><Text style={s.adminBtnTxt}>✨ Escolher selo</Text></TouchableOpacity>
-          <TouchableOpacity style={s.adminBtn} onPress={() => setModalMoldura(true)}><Text style={s.adminBtnTxt}>🖼️ Escolher moldura</Text></TouchableOpacity>
-          <TouchableOpacity style={s.adminBtn} onPress={() => setModalTitulo(true)}><Text style={s.adminBtnTxt}>🏅 Escolher título</Text></TouchableOpacity>
-
-          {/* Configurações */}
-          <Text style={[s.catTitulo, { marginTop: 16 }]}>⚙️ Configurações</Text>
-          <TouchableOpacity style={s.adminBtn} onPress={() => { setHorarioInput(meuHorario || '20:30'); setModalHorario(true); }}>
-            <Text style={s.adminBtnTxt}>⏰ {meuHorario ? `Lembrete: ${meuHorario}` : 'Definir horário pessoal'}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={s.adminBtn} onPress={() => setModalGenero(true)}><Text style={s.adminBtnTxt}>👤 Alterar gênero</Text></TouchableOpacity>
-
-          {/* Dupla / Conectar */}
-          <Text style={[s.catTitulo, { marginTop: 16 }]}>💕 Dupla</Text>
-          <View style={[s.adminBtn, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
-            <Text style={s.adminBtnTxt}>Parceiro(a):</Text>
-            <Text style={{ color: '#fff' }}>{parceiro ? parceiro.nome : 'Nenhum'}</Text>
+          {/* ── SETOR: Customização ── */}
+          <Text style={s.setorTitulo}>🎮 Customização</Text>
+          <View style={s.setorGrid}>
+            <TouchableOpacity style={s.setorBtn} onPress={() => setModalSelo(true)}>
+              <Text style={s.setorBtnIcon}>✨</Text>
+              <Text style={s.setorBtnLabel}>Selos</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.setorBtn} onPress={() => setModalMoldura(true)}>
+              <Text style={s.setorBtnIcon}>🖼️</Text>
+              <Text style={s.setorBtnLabel}>Molduras</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.setorBtn} onPress={() => setModalTitulo(true)}>
+              <Text style={s.setorBtnIcon}>🏅</Text>
+              <Text style={s.setorBtnLabel}>Títulos</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.setorBtn} onPress={() => setModalLoja(true)}>
+              <Text style={s.setorBtnIcon}>🛒</Text>
+              <Text style={s.setorBtnLabel}>{antrix} 💠</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={s.adminBtn} onPress={() => { setCodigoGerado(''); setPairInput(''); setModalConectar(true); }}>
-            <Text style={s.adminBtnTxt}>🔗 Conectar parceiro(a)</Text>
-          </TouchableOpacity>
 
-          {/* Social */}
-          <Text style={[s.catTitulo, { marginTop: 16 }]}>🌍 Social</Text>
-          <TouchableOpacity style={[s.adminBtn, { borderColor: '#44ff44' }]} onPress={carregarRankingGlobal}>
-            <Text style={[s.adminBtnTxt, { color: '#44ff44' }]}>🏆 Ver Ranking Global</Text>
-          </TouchableOpacity>
+          {/* Título secreto — "Aquele Que Ama Mais" */}
+          {tituloEquipado === 'amor_64' && titulosDesbloqueados['amor_64'] && (() => {
+            const glowOpacity = tituloGlow.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] });
+            const glowScale   = tituloGlow.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1.03] });
+            return (
+              <View style={{ alignItems: 'center', marginVertical: 16 }}>
+                {/* Camada de brilho externo */}
+                <Animated.View style={{
+                  position: 'absolute', width: 240, height: 52,
+                  borderRadius: 14, borderWidth: 1.5,
+                  borderColor: '#ffffff',
+                  opacity: glowOpacity,
+                  transform: [{ scale: glowScale }],
+                  shadowColor: '#fff', shadowOffset: { width: 0, height: 0 },
+                  shadowOpacity: 0.8, shadowRadius: 12,
+                }} />
+                {/* Título */}
+                <View style={s.tituloSecreto}>
+                  <Text style={s.tituloSecretoTxt}>Aquele Que Ama Mais</Text>
+                </View>
+              </View>
+            );
+          })()}
 
-          {/* Conta */}
-          <Text style={[s.catTitulo, { marginTop: 16 }]}>👤 Conta</Text>
-          <Text style={{ color: tema.sub, fontSize: 12, marginBottom: 8 }}>{perfil?.email}</Text>
+          {/* Input secreto oculto — sem label visível */}
+          {!conquistasDesbloqueadas['amor_64'] && (
+            <TextInput
+              style={[s.input, { color: '#111', backgroundColor: '#111', borderColor: '#111', marginTop: 8 }]}
+              placeholder="..." placeholderTextColor="#111"
+              value={inputAmor64} onChangeText={setInputAmor64}
+              onSubmitEditing={() => { verificarAmor64(inputAmor64); setInputAmor64(''); }}
+              returnKeyType="done"
+            />
+          )}
+
+          {/* ── SETOR: Configurações ── */}
+          <Text style={s.setorTitulo}>⚙️ Configurações</Text>
+          <View style={s.setorGrid}>
+            <TouchableOpacity
+              style={[s.setorBtn, !ehMulher && { opacity: 0.5 }]}
+              onPress={() => {
+                if (!ehMulher) return; // homem não abre modal
+                setHorarioInput(meuHorario || '20:30');
+                setModalHorario(true);
+              }}
+            >
+              <Text style={s.setorBtnIcon}>⏰</Text>
+              <Text style={s.setorBtnLabel}>
+                {ehMulher
+                  ? (meuHorario || 'Definir horário')
+                  : (meuHorario ? meuHorario : '—')
+                }
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.setorBtn} onPress={() => setModalGenero(true)}>
+              <Text style={s.setorBtnIcon}>👤</Text>
+              <Text style={s.setorBtnLabel}>Gênero</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.setorBtn} onPress={() => { setCodigoGerado(''); setPairInput(''); setModalConectar(true); }}>
+              <Text style={s.setorBtnIcon}>🔗</Text>
+              <Text style={s.setorBtnLabel}>Dupla</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.setorBtn} onPress={carregarRankingGlobal}>
+              <Text style={s.setorBtnIcon}>🏆</Text>
+              <Text style={s.setorBtnLabel}>Global</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.setorBtn} onPress={abrirRelatorioMensal}>
+              <Text style={s.setorBtnIcon}>📊</Text>
+              <Text style={s.setorBtnLabel}>Relatório</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Loja abre via modal — botão na seção Customização acima */}
+
+          {/* ── SETOR: Conta ── */}
+          <Text style={s.setorTitulo}>👤 Conta</Text>
+          <Text style={{ color: tema.sub, fontSize: 12, marginBottom: 12 }}>{perfil?.email}</Text>
           <TouchableOpacity style={[s.btnSecondary, { marginTop: 4 }]} onPress={fazerLogout}>
             <Text style={{ color: '#ff4444', fontWeight: '700' }}>🚪 Sair da conta</Text>
           </TouchableOpacity>
@@ -1991,15 +2609,16 @@ export default function App() {
         </>}
 
       </ScrollView>
+      </Animated.View>
 
       {/* ── TAB BAR FIXA EMBAIXO ── */}
       <View style={s.tabBar}>
         {ABAS.map((aba) => {
-          const icones = { home:'🏠', calendario:'📅', ranking:'🏆', loja:'🛒', conquistas:'🏅', mural:'💌', sugestoes:'💡', perfil:'👤' };
-          const labels = { home:'Home', calendario:'Cal.', ranking:'Rank', loja:'Loja', conquistas:'Troféus', mural:'Mural', sugestoes:'Ideias', perfil:'Perfil' };
+          const icones = { home:'🏠', calendario:'📅', ranking:'🏆', conquistas:'🏅', mural:'💌', sugestoes:'💡', perfil:'👤' };
+          const labels = { home:'Home', calendario:'Cal.', ranking:'Rank', conquistas:'Troféus', mural:'Mural', sugestoes:'Ideias', perfil:'Perfil' };
           const ativo = abaAtiva === aba;
           return (
-            <TouchableOpacity key={aba} style={s.tabItem} onPress={() => { abaAtivaRef.current = aba; setAbaAtiva(aba); }}>
+            <TouchableOpacity key={aba} style={s.tabItem} onPress={() => { const idx = ABAS.indexOf(abaAtivaRef.current); const newIdx = ABAS.indexOf(aba); trocarAba(aba, newIdx >= idx ? 1 : -1); }}>
               {ativo && <View style={s.tabIndicator} />}
               <Text style={{ fontSize: 19, opacity: ativo ? 1 : 0.3 }}>{icones[aba]}</Text>
               <Text style={{ fontSize: 9, marginTop: 1, color: ativo ? tema.primary : tema.sub, fontWeight: ativo ? '700' : '400' }}>{labels[aba]}</Text>
@@ -2011,9 +2630,8 @@ export default function App() {
     </View>
   );
 }
-
 const makeStyles = (tema) => StyleSheet.create({
-  root:            { flex: 1, backgroundColor: tema.bg },
+  root:            { flex: 1, backgroundColor: tema.bg, paddingTop: Platform.OS === 'android' ? 28 : 0 },
   splash:          { flex: 1, backgroundColor: '#0a0010', alignItems: 'center', justifyContent: 'center' },
   splashEmoji:     { fontSize: 64, marginBottom: 16 },
   splashTitle:     { fontSize: 28, fontWeight: '800', color: '#fff' },
@@ -2101,5 +2719,36 @@ const makeStyles = (tema) => StyleSheet.create({
   mensagemData:    { color: tema.sub, fontSize: 10, marginTop: 4, textAlign: 'right' },
   countdownBar:    { backgroundColor: tema.card, borderRadius: 10, padding: 7, alignItems: 'center', marginBottom: 10, borderWidth: 1, borderColor: tema.border },
   countdownTxt:    { color: tema.sub, fontSize: 12, fontWeight: '700' },
+
+  // ── Novos styles alpha 0.0.14 ──
+  setorTitulo:     { color: '#fff', fontSize: 13, fontWeight: '800', marginTop: 20, marginBottom: 10, letterSpacing: 1, textTransform: 'uppercase' },
+  setorGrid:       { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 8 },
+  setorBtn:        { flex: 1, minWidth: '45%', backgroundColor: tema.card, borderRadius: 16, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: tema.border },
+  setorBtnIcon:    { fontSize: 28, marginBottom: 6 },
+  setorBtnLabel:   { color: tema.sub, fontSize: 11, fontWeight: '700' },
+
+  tituloSecreto:   {
+    backgroundColor: '#000',
+    borderRadius: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderWidth: 2,
+    borderColor: '#fff',
+    // Efeito relevo via sombras
+    shadowColor: '#fff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    elevation: 12,
+  },
+  tituloSecretoTxt: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+    textShadowColor: '#fff',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
+  },
 });
 
