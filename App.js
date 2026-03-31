@@ -629,7 +629,7 @@ export default function App() {
   const [modalInicio, setModalInicio] = useState(false);
   const [modalGenero, setModalGenero] = useState(false);
   const [modalHorario, setModalHorario] = useState(false);
-  const [horario || "20:30"Input, setHorarioInput] = useState('20:30');
+  const [horarioInput, setHorarioInput] = useState('20:30');
   const [modalConectar, setModalConectar] = useState(false);
   const [modalRelatorio, setModalRelatorio] = useState(false);
   const [relatorioAtual, setRelatorioAtual] = useState(null);
