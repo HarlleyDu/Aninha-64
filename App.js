@@ -1,6 +1,6 @@
 // ============================================================
 // DuoTrack — App.js
-// Versão: alpha 0.0.21
+// Versão: alpha 0.0.22
 // ============================================================
 //
 // ════════════════════════════════════════════════════════════
@@ -174,7 +174,7 @@ try {
   console.error("Firebase Init Error:", e);
 }
 
-const VERSAO_ATUAL  = "alpha 0.0.21";
+const VERSAO_ATUAL  = "alpha 0.0.22";
 const ADMIN_EMAIL   = "Harlleyduarte@gmail.com";
 const JANELA_TOLERANCIA_MIN = 10; // janela de ouro = horário definido ± 10 min
 const { width: SW } = Dimensions.get('window');
@@ -2766,3 +2766,34 @@ const makeStyles = (tema) => StyleSheet.create({
   },
 });
 
+
+import { Linking, Alert } from 'react-native';
+
+
+import { Linking, Alert } from 'react-native';
+
+const baixarEInstalarAPK = async (url) => {
+  try {
+    if (!url) {
+      Alert.alert("Erro", "Link de atualização inválido.");
+      return;
+    }
+    await Linking.openURL(url);
+  } catch (e) {
+    console.log(e);
+    Alert.alert("Erro", "Não foi possível abrir a atualização.");
+  }
+};
+
+
+// ===== FIX CADASTRO =====
+const tratarErroFirebase = (erro) => {
+  if (!erro?.message) return "Erro desconhecido";
+
+  if (erro.message.includes("email-already")) return "Email já cadastrado.";
+  if (erro.message.includes("invalid-email")) return "Email inválido.";
+  if (erro.message.includes("weak-password")) return "Senha muito fraca (mín 6).";
+  if (erro.message.includes("network")) return "Sem internet.";
+
+  return erro.message;
+};

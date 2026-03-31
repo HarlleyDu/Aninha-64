@@ -16,13 +16,21 @@
         "backgroundColor": "#0A0010"
       },
       "package": "com.harlley.aninha64",
-      "permissions": ["NOTIFICATIONS", "RECEIVE_BOOT_COMPLETED", "VIBRATE"]
+      "permissions": [
+        "NOTIFICATIONS",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ]
     },
     "plugins": [
-      ["expo-notifications", {
-        "color": "#C084FC",
-        "sounds": []
-      }]
+      [
+        "expo-notifications",
+        {
+          "color": "#C084FC",
+          "sounds": []
+        }
+      ],
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {
