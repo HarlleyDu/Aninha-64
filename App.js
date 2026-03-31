@@ -1,6 +1,6 @@
 // ============================================================
 // DuoTrack — App.js
-// Versão: alpha 0.0.18
+// Versão: alpha 0.0.20
 // ============================================================
 //
 // ════════════════════════════════════════════════════════════
@@ -174,7 +174,7 @@ try {
   console.error("Firebase Init Error:", e);
 }
 
-const VERSAO_ATUAL  = "alpha 0.0.18";
+const VERSAO_ATUAL  = "alpha 0.0.20";
 const ADMIN_EMAIL   = "Harlleyduarte@gmail.com";
 const JANELA_TOLERANCIA_MIN = 10; // janela de ouro = horário definido ± 10 min
 const { width: SW } = Dimensions.get('window');
@@ -427,7 +427,9 @@ const estaDentroJanela = (horario, tolerMin = 10, agora = new Date()) => {
 
 const versaoMaior = (nova, atual) => {
   if (!nova || !atual) return false;
-  const p = v => v.split('.').map(Number);
+  // Remove prefixo "alpha " ou similar antes de comparar números
+  const limpar = v => v.replace(/^[^0-9]*/, '');
+  const p = v => limpar(v).split('.').map(n => parseInt(n, 10) || 0);
   const [maN, miN, ptN] = p(nova); const [maA, miA, ptA] = p(atual);
   if (maN !== maA) return maN > maA; if (miN !== miA) return miN > miA; return ptN > ptA;
 };
@@ -438,50 +440,69 @@ Notifications.setNotificationHandler({
 
 // Círculo de consistência compacto — não ocupa a tela toda
 function ConsistencyCircle({ historico, dataInicio, tema }) {
-  // Ciclo de 30 dias
   const TOTAL = 30;
   const SIZE  = 88;
   const R     = SIZE / 2;
   const DOT   = 5;
   const hoje  = todayKey();
 
+  // Se não tem dataInicio definido, mostra círculo vazio com aviso
+  if (!dataInicio) {
+    const dotsVazios = Array.from({ length: TOTAL }, (_, i) => {
+      const angle = (i / TOTAL) * 2 * Math.PI - Math.PI / 2;
+      return {
+        x: R + Math.cos(angle) * (R - DOT) - DOT / 2,
+        y: R + Math.sin(angle) * (R - DOT) - DOT / 2,
+        cor: tema.border,
+      };
+    });
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+        <View style={{ width: SIZE, height: SIZE, position: 'relative' }}>
+          <View style={{ position: 'absolute', width: SIZE, height: SIZE, borderRadius: R, borderWidth: 1, borderColor: tema.border }} />
+          {dotsVazios.map((d, i) => (
+            <View key={i} style={{ position: 'absolute', left: d.x, top: d.y, width: DOT, height: DOT, borderRadius: DOT / 2, backgroundColor: d.cor }} />
+          ))}
+          <View style={{ position: 'absolute', top: SIZE * 0.25, left: SIZE * 0.25, width: SIZE * 0.5, height: SIZE * 0.5, borderRadius: SIZE * 0.25, backgroundColor: tema.card, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ color: tema.sub, fontSize: 9, fontWeight: '700' }}>—</Text>
+          </View>
+        </View>
+        <View>
+          <Text style={{ color: tema.sub, fontSize: 12 }}>Ciclo não iniciado</Text>
+          <Text style={{ color: tema.sub, fontSize: 10, marginTop: 2 }}>Admin define a data de início</Text>
+        </View>
+      </View>
+    );
+  }
+
   const getDayKey = (idx) => {
-    if (!dataInicio) return null;
     const d = new Date(dataInicio + 'T12:00:00');
     d.setDate(d.getDate() + idx - 1);
     return dateToKey(d);
   };
 
-  // Conta dias tomados no ciclo atual (a partir de dataInicio)
   const totalTomou = Object.values(historico).filter(e => e?.tomou).length;
 
-  // diasPassados = quantos dias já se passaram desde o início (máx 30)
   const diasPassados = (() => {
-    if (!dataInicio) return 0;
     const diff = Math.floor((new Date(hoje + 'T12:00:00') - new Date(dataInicio + 'T12:00:00')) / 86400000) + 1;
     return Math.min(Math.max(diff, 0), TOTAL);
   })();
 
-  // Dias tomados no horário certo (noHorarioCerto === true)
-  const diasCertos = Object.values(historico).filter(e => e?.tomou && e?.noHorarioCerto !== false).length;
-  // Dias perdidos = passou o dia mas não tomou
+  const diasCertos  = Object.values(historico).filter(e => e?.tomou && e?.noHorarioCerto !== false).length;
   const diasPerdidos = Math.max(0, diasPassados - totalTomou);
-  // Dias errados = tomou mas fora do horário
-  const diasErrados = Math.max(0, totalTomou - diasCertos);
-
-  // % = dias certos / dias passados
+  const diasErrados  = Math.max(0, totalTomou - diasCertos);
   const consistencia = diasPassados > 0 ? Math.round((diasCertos / diasPassados) * 100) : 0;
 
   const dots = Array.from({ length: TOTAL }, (_, i) => {
-    const angle = ((i) / TOTAL) * 2 * Math.PI - Math.PI / 2;
+    const angle = (i / TOTAL) * 2 * Math.PI - Math.PI / 2;
     const x = R + Math.cos(angle) * (R - DOT) - DOT / 2;
     const y = R + Math.sin(angle) * (R - DOT) - DOT / 2;
     const key = getDayKey(i + 1);
-    const tomou = key ? !!historico[key]?.tomou : false;
-    const futuro = key ? key > hoje : true;
+    const tomou = !!historico[key]?.tomou;
+    const futuro = key > hoje;
     let cor = tema.border;
     if (tomou) cor = tema.primary;
-    else if (!futuro && key) cor = '#ff4444';
+    else if (!futuro) cor = '#ff4444';
     return { x, y, cor };
   });
 
@@ -1158,7 +1179,22 @@ export default function App() {
   async function salvarGenero(genero) {
     try {
       await update(ref(db, `usuarios/${authUser.uid}`), { genero });
-      setPerfil(p => ({ ...p, genero })); setModalGenero(false);
+      setPerfil(p => ({ ...p, genero }));
+      // alpha 0.0.19: se mudou para homem/nao_informado, remove horário do casal
+      // para o countdown e notificações não ficarem presos no horário de quando era mulher
+      if (genero !== 'mulher' && casalId) {
+        await remove(ref(db, `casais/${casalId}/config/horariosNotificacao/${authUser.uid}`));
+        setCasalConfig(c => {
+          const h = { ...(c.horariosNotificacao || {}) };
+          delete h[authUser.uid];
+          return { ...c, horariosNotificacao: h };
+        });
+        // Também limpa o horarioPessoal do perfil local
+        await update(ref(db, `usuarios/${authUser.uid}`), { horarioPessoal: null });
+        setPerfil(p => ({ ...p, horarioPessoal: null }));
+        if (casalId) await configurarAlarmes(casalId);
+      }
+      setModalGenero(false);
     } catch(e) { Alert.alert('Erro', 'Não foi possível salvar.'); }
   }
 
@@ -1356,12 +1392,15 @@ export default function App() {
     try {
       const agora = new Date();
       const hora = agora.toTimeString().slice(0, 5);
-      const naJanela = estaDentroJanela('20:30', 10, agora);
-      // Verifica se tomou no horário pessoal (tolerância 10min) — lê do perfil agora
-      const meuHorarioPessoal = perfil?.horarioPessoal || null;
-      const noHorarioCerto = meuHorarioPessoal
-        ? estaDentroJanela(meuHorarioPessoal, 10, agora)
-        : naJanela;
+      // alpha 0.0.19: usa horário dinâmico do casal (definido pela mulher)
+      const horariosDoCalsal = casalConfig?.horariosNotificacao || {};
+      const horarioDupla = Object.values(horariosDoCalsal)[0] || null;
+      const meuHorarioPessoal = perfil?.horarioPessoal || horarioDupla || null;
+      // naJanela = dentro da janela de ouro (horário da mulher ± 10 min)
+      const naJanela = meuHorarioPessoal
+        ? estaDentroJanela(meuHorarioPessoal, JANELA_TOLERANCIA_MIN, agora)
+        : false;
+      const noHorarioCerto = naJanela;
       // alpha 0.0.18: pontos indexados por uid — genérico para qualquer dupla
       const np = { ...pontos };
       // quem ganhou o ponto: se na janela, é a mulher da dupla; senão, quem marcou
@@ -1403,9 +1442,54 @@ export default function App() {
   async function adminToggleDia(key) {
     if (!isAdmin) return;
     try {
-      if (historico[key]) await remove(ref(db, `casais/${casalId}/historico/${key}`));
-      else await set(ref(db, `casais/${casalId}/historico/${key}`), { data: key, hora: '20:30', tomou: true });
-    } catch(e) {}
+      if (historico[key]) {
+        const entrada = historico[key];
+        // Só estorna se foi marcado como tomado (não faltas automáticas)
+        if (entrada.tomou && !entrada.faltaAutomatica) {
+          const uidMarcou = entrada.quemMarcou;
+          if (uidMarcou) {
+            // Recalcula recompensa que foi dada naquele dia
+            // Usa streak=1 como base conservadora para estorno (não temos o streak exato do dia)
+            const { pontosGanhos, antrixGanho } = calcularRecompensa(1);
+            // Busca dados atuais do usuário que marcou
+            const snapUser = await get(ref(db, `usuarios/${uidMarcou}`));
+            if (snapUser.exists()) {
+              const dadosUser = snapUser.val();
+              const novoIndPontos = Math.max(0, (dadosUser.indPontos || 0) - pontosGanhos);
+              const novoAntrix    = Math.max(0, (dadosUser.antrix    || 0) - antrixGanho);
+              const novoStreak    = Math.max(0, (dadosUser.streak    || 0) - 1);
+              await update(ref(db, `usuarios/${uidMarcou}`), {
+                indPontos: novoIndPontos,
+                antrix:    novoAntrix,
+                streak:    novoStreak,
+              });
+              // Atualiza estado local se for o próprio usuário logado
+              if (uidMarcou === authUser?.uid) {
+                setIndPontos(novoIndPontos);
+                setAntrix(novoAntrix);
+                setStreak(novoStreak);
+              }
+            }
+            // Estorna ponto do casal
+            const npAtual = { ...pontos };
+            const uidMulher = Object.keys(casalConfig?.horariosNotificacao || {})[0];
+            const uidPonto = entrada.naJanelaOuro ? (uidMulher || uidMarcou) : uidMarcou;
+            if (npAtual[uidPonto] > 0) {
+              npAtual[uidPonto] = (npAtual[uidPonto] || 1) - 1;
+              await set(ref(db, `casais/${casalId}/pontos`), npAtual);
+            }
+          }
+        }
+        await remove(ref(db, `casais/${casalId}/historico/${key}`));
+        Alert.alert('Admin', `Dia ${key} desmarcado e recompensas revertidas.`);
+      } else {
+        // Marca manualmente sem dar recompensa (só histórico visual)
+        await set(ref(db, `casais/${casalId}/historico/${key}`), {
+          data: key, hora: '--:--', tomou: true, quemMarcou: null,
+          noHorarioCerto: false, naJanelaOuro: false, adminManual: true,
+        });
+      }
+    } catch(e) { Alert.alert('Erro', 'Falha ao alterar dia.'); }
   }
 
   async function definirDataInicio() {
@@ -1628,6 +1712,7 @@ O relatório será salvo no app.`;
     ? (perfil?.horarioPessoal || null)
     : (Object.values(horariosDoCalsal)[0] || null); // homem: pega o primeiro horário do casal
   const baixando   = otaProgress > 0 && otaProgress < 1;
+  const temUpdate  = otaInfo && versaoMaior(otaInfo.versao, VERSAO_ATUAL);
 
   // ── RENDERS DE TELA ─────────────────────────────────────────────────────────
   if (tela === 'splash') return (
@@ -2510,6 +2595,12 @@ O relatório será salvo no app.`;
             <Text style={{ color: '#ff4444', fontWeight: '700' }}>🚪 Sair da conta</Text>
           </TouchableOpacity>
           <Text style={{ color: '#333', fontSize: 11, textAlign: 'center', marginTop: 16 }}>v{VERSAO_ATUAL}</Text>
+          {temUpdate && (
+            <TouchableOpacity style={{ backgroundColor: '#ff2d78', padding: 8, borderRadius: 8, marginTop: 8, alignItems: 'center' }} onPress={() => setModalOta(true)}>
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 12 }}>🚀 Atualização disponível: {otaInfo.versao}</Text>
+              <Text style={{ color: '#fff', fontSize: 10 }}>Toque para baixar</Text>
+            </TouchableOpacity>
+          )}
         </>}
 
       </ScrollView>
