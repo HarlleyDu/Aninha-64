@@ -1,7 +1,6 @@
-import * as Notifications from "expo-notifications";
 // ============================================================
 // DuoTrack — App.js
-// Versão: alpha 0.0.22
+// Versão: alpha 0.0.23
 // ============================================================
 //
 // ════════════════════════════════════════════════════════════
@@ -130,15 +129,17 @@ import * as Notifications from "expo-notifications";
 //                 admin desbloquear conquistas, barra de abas menor
 //   alpha 0.0.2 — ConsistencyCircle compacto (80px), não ocupa tela
 //   alpha 0.0.3 — documentação completa no código
+//   alpha 0.0.23 — login/cadastro navega direto, sem tela pair, sem horário fixo
 //
 // ============================================================
 
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Linking,
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView,
   Alert, TextInput, Modal, Animated, Image,
   ActivityIndicator, Dimensions, PanResponder, StatusBar, FlatList, Platform
 } from 'react-native';
 
+import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import * as FileSystem from 'expo-file-system';
 import * as IntentLauncher from 'expo-intent-launcher';
@@ -174,7 +175,7 @@ try {
   console.error("Firebase Init Error:", e);
 }
 
-const VERSAO_ATUAL  = "alpha 0.0.22";
+const VERSAO_ATUAL  = "alpha 0.0.23";
 const ADMIN_EMAIL   = "Harlleyduarte@gmail.com";
 const JANELA_TOLERANCIA_MIN = 10; // janela de ouro = horário definido ± 10 min
 const { width: SW } = Dimensions.get('window');
@@ -418,9 +419,9 @@ const diasNoMes = (mes, ano) => new Date(ano, mes + 1, 0).getDate();
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
                'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
-const estaDentroJanela = (horario = "20:30", tolerMin = 10, agora = new Date()) => {
+const estaDentroJanela = (horario, tolerMin = 10, agora = new Date()) => {
   if (!horario) return false;
-  const [h, m] = (horario).split(':').map(Number);
+  const [h, m] = horario.split(':').map(Number);
   const r = new Date(agora); r.setHours(h, m, 0, 0);
   return Math.abs(agora.getTime() - r.getTime()) / 60000 <= tolerMin;
 };
@@ -486,7 +487,8 @@ function ConsistencyCircle({ historico, dataInicio, tema, horario }) {
   const diasPassados = (() => {
     // Se hoje ainda não passou do horário da pílula + tolerância, não conta hoje como passado
     const agora = new Date();
-    const [h, m] = (horario || '20:30').split(':').map(Number);
+    if (!horario) { return TOTAL; }
+    const [h, m] = horario.split(':').map(Number);
     const limiteHoje = new Date();
     limiteHoje.setHours(h, m + JANELA_TOLERANCIA_MIN, 0, 0);
     
@@ -511,7 +513,10 @@ function ConsistencyCircle({ historico, dataInicio, tema, horario }) {
     
     // Lógica para cor do dot: só fica vermelho se o dia já passou do horário limite
     const agora = new Date();
-    const [h, m] = (horario || '20:30').split(':').map(Number);
+    if (!horario) {
+      return { x, y, cor: key < hoje ? '#ff4444' : tema.border };
+    }
+    const [h, m] = horario.split(':').map(Number);
     const limiteHoje = new Date();
     limiteHoje.setHours(h, m + JANELA_TOLERANCIA_MIN, 0, 0);
     
@@ -629,7 +634,7 @@ export default function App() {
   const [modalInicio, setModalInicio] = useState(false);
   const [modalGenero, setModalGenero] = useState(false);
   const [modalHorario, setModalHorario] = useState(false);
-  const [horarioInput, setHorarioInput] = useState('20:30');
+  const [horarioInput, setHorarioInput] = useState('');
   const [modalConectar, setModalConectar] = useState(false);
   const [modalRelatorio, setModalRelatorio] = useState(false);
   const [relatorioAtual, setRelatorioAtual] = useState(null);
@@ -646,7 +651,6 @@ export default function App() {
   const [countdown, setCountdown] = useState('');
   const [naJanela, setNaJanela] = useState(false);
   useEffect(() => {
-  pedirPermissaoNotificacao();
     const tick = () => {
       const horariosDoCalsal = casalConfig?.horariosNotificacao || {};
       const ehMulherLocal = perfil?.genero === 'mulher';
@@ -751,22 +755,19 @@ export default function App() {
   const listenersRef = useRef([]);
 
   // Mantém ref sincronizado com state
-  useEffect(() => {
-  pedirPermissaoNotificacao(); abaAtivaRef.current = abaAtiva; }, [abaAtiva]);
+  useEffect(() => { abaAtivaRef.current = abaAtiva; }, [abaAtiva]);
 
   useEffect(() => {
-  pedirPermissaoNotificacao();
     const unsub = onAuthStateChanged(auth, async (user) => {
       try {
         if (user) { setAuthUser(user); await carregarPerfil(user.uid); }
         else { resetEstado(); setTela('auth'); }
-      } catch(e) { console.error("onAuthStateChanged error:", e); setTela('auth'); }
+      } catch(e) { setTela('auth'); }
     });
     return () => unsub();
   }, []);
 
   useEffect(() => {
-  pedirPermissaoNotificacao();
     if (!db) return;
     const r = ref(db, 'config');
     const unsub = onValue(r, snap => {
@@ -782,7 +783,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-  pedirPermissaoNotificacao();
     const pulse = Animated.loop(Animated.sequence([
       Animated.timing(pulseBtn, { toValue: 1.05, duration: 800, useNativeDriver: true }),
       Animated.timing(pulseBtn, { toValue: 1, duration: 800, useNativeDriver: true }),
@@ -791,14 +791,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-  pedirPermissaoNotificacao();
     if (casalId) { iniciarListeners(casalId); return () => pararListeners(); }
   }, [casalId]);
 
   // alpha 0.0.16: marca automaticamente dias perdidos após fim da pausa
   // Se passou do fim da pausa e não tomou no dia seguinte até 00:00, marca falta
   useEffect(() => {
-  pedirPermissaoNotificacao();
     if (!casalId || !pausa?.fim || !dataInicio) return;
     const fimPausa = pausa.fim; // "YYYY-MM-DD"
     const diaApos  = addDias(fimPausa, 1); // primeiro dia que deve tomar de novo
@@ -822,7 +820,6 @@ export default function App() {
 
   // Animação leve contínua do título secreto (brilho pulsante ao redor)
   useEffect(() => {
-  pedirPermissaoNotificacao();
     const glow = Animated.loop(Animated.sequence([
       Animated.timing(tituloGlow, { toValue: 1, duration: 1400, useNativeDriver: true }),
       Animated.timing(tituloGlow, { toValue: 0, duration: 1400, useNativeDriver: true }),
@@ -1061,7 +1058,7 @@ export default function App() {
             body: temNotifEspecial ? `São ${h} — não esquece de tomar, meu amor! 💕` : `São ${h} — hora da sua rotina! 💊`,
             sound: true,
           },
-          trigger: { seconds: 10 },
+          trigger: { hour: hh, minute: mm, repeats: true },
         });
       }
 
@@ -1083,7 +1080,7 @@ export default function App() {
         await Notifications.scheduleNotificationAsync({
           identifier: `janela_alerta_${i}`,
           content: { title: '⚠️ Quase no horário!', body: alertaTxt, sound: true },
-          trigger: { seconds: 10 },
+          trigger: { hour: alertaHH < 0 ? 23 : alertaHH, minute: alertaMin, repeats: true },
         });
       }
     } catch(e) { console.warn("Erro notificações:", e); }
@@ -1109,8 +1106,8 @@ export default function App() {
 
   async function fazerLogin() {
     setAuthLoading(true); setAuthErro('');
-    try { await signInWithEmailAndPassword(auth, authEmail.trim(), authSenha); }
-    catch(e) { setAuthErro('Erro no login. Verifique seus dados.'); }
+    try { const cred = await signInWithEmailAndPassword(auth, authEmail.trim(), authSenha); setAuthUser(cred.user); await carregarPerfil(cred.user.uid); }
+    catch(e) { setAuthErro('Erro: ' + (e?.message || JSON.stringify(e))); }
     setAuthLoading(false);
   }
 
@@ -1141,7 +1138,13 @@ export default function App() {
         }
       });
     setAuthUser(cred.user); await carregarPerfil(cred.user.uid);
-    } catch(e) { setAuthErro('Erro: ' + (e?.message || JSON.stringify(e))); }
+    } catch(e) {
+      let msg = 'Erro no cadastro.';
+      if (e.code === 'auth/email-already-in-use') msg = 'Este email já está em uso.';
+      if (e.code === 'auth/invalid-email') msg = 'Email inválido.';
+      if (e.code === 'auth/weak-password') msg = 'Senha muito fraca.';
+      setAuthErro(msg);
+    }
     setAuthLoading(false);
   }
 
@@ -1423,10 +1426,10 @@ export default function App() {
       // alpha 0.0.19: usa horário dinâmico do casal (definido pela mulher)
       const horariosDoCalsal = casalConfig?.horariosNotificacao || {};
       const horarioDupla = Object.values(horariosDoCalsal)[0] || null;
-      const horarioPessoal = perfil?.horarioPessoal || horarioDupla || null;
+      const meuHorarioPessoal = perfil?.horarioPessoal || horarioDupla || null;
       // naJanela = dentro da janela de ouro (horário da mulher ± 10 min)
-      const naJanela = horarioPessoal
-        ? estaDentroJanela(horarioPessoal, JANELA_TOLERANCIA_MIN, agora)
+      const naJanela = meuHorarioPessoal
+        ? estaDentroJanela(meuHorarioPessoal, JANELA_TOLERANCIA_MIN, agora)
         : false;
       const noHorarioCerto = naJanela;
       // alpha 0.0.18: pontos indexados por uid — genérico para qualquer dupla
@@ -1736,7 +1739,7 @@ O relatório será salvo no app.`;
   const ehMulher   = perfil?.genero === 'mulher';
   // Horário que o usuário vê: mulher vê o próprio, homem vê o da parceira (se houver)
   const horariosDoCalsal = casalConfig?.horariosNotificacao || {};
-  const horario = ehMulher
+  const meuHorario = ehMulher
     ? (perfil?.horarioPessoal || null)
     : (Object.values(horariosDoCalsal)[0] || null); // homem: pega o primeiro horário do casal
   const baixando   = otaProgress > 0 && otaProgress < 1;
@@ -2276,10 +2279,10 @@ O relatório será salvo no app.`;
           </View>
 
           {/* alpha 0.0.15: aviso para mulher sem horário definido */}
-          {ehMulher && !horario && (
+          {ehMulher && !meuHorario && (
             <TouchableOpacity
               style={{ backgroundColor: '#ff2d7822', borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: tema.primary, flexDirection: 'row', alignItems: 'center' }}
-              onPress={() => { setHorarioInput('20:30'); setModalHorario(true); }}
+              onPress={() => { setHorarioInput(''); setModalHorario(true); }}
             >
               <Text style={{ fontSize: 20, marginRight: 10 }}>⏰</Text>
               <View style={{ flex: 1 }}>
@@ -2297,12 +2300,12 @@ O relatório será salvo no app.`;
               <Text style={s.cardSub}>{pD} dias restantes</Text>
             </View>
           ) : <>
-            <ConsistencyCircle historico={historico} dataInicio={dataInicio} tema={tema} horario={horario} />
+            <ConsistencyCircle historico={historico} dataInicio={dataInicio} tema={tema} horario={meuHorario} />
             <View style={[s.card, { borderColor: tomouHoje ? '#00ff87' : naJanela ? '#00ff87' : tema.primary }]}>
               <Text style={{ fontSize: 48 }}>{tomouHoje ? '✅' : naJanela ? '🟢' : '⏰'}</Text>
               <Text style={s.cardTitulo}>{tomouHoje ? 'Tomou hoje!' : naJanela ? 'HORA DA PÍLULA!' : 'Ainda não tomou'}</Text>
               <Text style={s.cardSub}>Dia {diaCartela}/28</Text>
-              {horario && !tomouHoje && <Text style={[s.cardSub, { marginTop: 6, color: tema.accent }]}>⏰ Seu lembrete: {horario}</Text>}
+              {meuHorario && !tomouHoje && <Text style={[s.cardSub, { marginTop: 6, color: tema.accent }]}>⏰ Seu lembrete: {meuHorario}</Text>}
             </View>
             {!tomouHoje && (
               <Animated.View style={{ transform: [{ scale: pulseBtn }] }}>
@@ -2584,15 +2587,15 @@ O relatório será salvo no app.`;
               style={[s.setorBtn, !ehMulher && { opacity: 0.5 }]}
               onPress={() => {
                 if (!ehMulher) return; // homem não abre modal
-                setHorarioInput(horario || '20:30');
+                setHorarioInput(meuHorario || '');
                 setModalHorario(true);
               }}
             >
               <Text style={s.setorBtnIcon}>⏰</Text>
               <Text style={s.setorBtnLabel}>
                 {ehMulher
-                  ? (horario || 'Definir horário')
-                  : (horario ? horario : '—')
+                  ? (meuHorario || 'Definir horário')
+                  : (meuHorario ? meuHorario : '—')
                 }
               </Text>
             </TouchableOpacity>
@@ -2775,41 +2778,3 @@ const makeStyles = (tema) => StyleSheet.create({
   },
 });
 
-
-
-
-
-const baixarEInstalarAPK = async (url) => {
-  try {
-    if (!url) {
-      Alert.alert("Erro", "Link de atualização inválido.");
-      return;
-    }
-    await Linking.openURL(url);
-  } catch (e) {
-    console.log(e);
-    Alert.alert("Erro", "Não foi possível abrir a atualização.");
-  }
-};
-
-
-// ===== FIX CADASTRO =====
-const tratarErroFirebase = (erro) => {
-  if (!erro?.message) return "Erro desconhecido";
-
-  if (erro.message.includes("email-already")) return "Email já cadastrado.";
-  if (erro.message.includes("invalid-email")) return "Email inválido.";
-  if (erro.message.includes("weak-password")) return "Senha muito fraca (mín 6).";
-  if (erro.message.includes("network")) return "Sem internet.";
-
-  return erro.message;
-};
-
-// ===== PERMISSÃO NOTIFICAÇÃO =====
-
-async function pedirPermissaoNotificacao() {
-  const { status } = await Notifications.requestPermissionsAsync();
-  if (status !== 'granted') {
-    console.log('Permissão negada');
-  }
-}
