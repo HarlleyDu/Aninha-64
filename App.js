@@ -760,7 +760,7 @@ export default function App() {
       try {
         if (user) { setAuthUser(user); await carregarPerfil(user.uid); }
         else { resetEstado(); setTela('auth'); }
-      } catch(e) { setTela('auth'); }
+      } catch(e) { console.error("onAuthStateChanged error:", e); setTela('auth'); }
     });
     return () => unsub();
   }, []);
@@ -1140,6 +1140,7 @@ export default function App() {
           loginStreak: 0, diasSemErroHorario: 0, antrixSemGastar: 0,
         }
       });
+    setAuthUser(cred.user); await carregarPerfil(cred.user.uid);
     } catch(e) { setAuthErro('Erro: ' + (e?.message || JSON.stringify(e))); }
     setAuthLoading(false);
   }
