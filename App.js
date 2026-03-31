@@ -1,228 +1,26 @@
 // ============================================================
-// ANINHA 64 — App.js
-// Versão: alpha 0.0.14
+// DuoTrack — App.js
+// Versão: alpha 0.0.18
 // ============================================================
 //
 // ════════════════════════════════════════════════════════════
-// 💊 ANINHA 64 — DOSSIÊ DEFINITIVO v2.0
+// 💊 DUOTRACK — DOSSIÊ DEFINITIVO v3.0
 // Documento para passar a qualquer IA continuar o desenvolvimento.
 // ════════════════════════════════════════════════════════════
 //
 // 🎯 O QUE É ESSE APP
-//   App Android privado de casal. Ana toma o contraceptivo Yazflex
-//   todo dia e o app:
-//   - Rastreia se ela tomou no horário certo (20:30–20:40 = Janela de Ouro)
+//   App Android genérico de adesão a rotina diária para duplas.
+//   Qualquer casal pode usar para rastrear qualquer hábito/remédio diário.
+//   - A mulher define o horário; Janela de Ouro = horário da mulher ± 10 min
 //   - Sincroniza em tempo real entre dois celulares via Firebase
 //   - Gamifica com pontos, Antrix (moeda), streak, loja, conquistas
-//   - Envia notificações diárias no horário
+//   - Privacidade total com pessoas de fora (ranking global: só nome + pontos)
+//   - Notificações especiais para a dupla pareada com Harlleyduarte@gmail.com
+//   - Máximo 2 membros por dupla
 //
-//   Criador: Harlley (Harlleyduarte@gmail.com) — é o admin
-//   Parceira: Ana
-//   Distribuição: APK via MediaFire/GitHub (não está na Play Store)
-//   Package: com.harlley.aninha64
-//
-// ════════════════════════════════════════════════════════════
-// 🏗️ STACK TÉCNICA (NUNCA MUDAR)
-// ════════════════════════════════════════════════════════════
-//   Framework:    React Native via Expo SDK 48
-//   Motor JS:     Hermes
-//   Build:        EAS CLI no Termux (Android)
-//   Backend:      Firebase Realtime Database
-//   Auth:         Firebase Authentication (email + senha)
-//   Storage:      Firebase Storage (fotos de perfil)
-//   Notificações: expo-notifications
-//   Persistência: getReactNativePersistence(ReactNativeAsyncStorage)
-//
-// ════════════════════════════════════════════════════════════
-// 🔑 CREDENCIAIS E CONTAS
-// ════════════════════════════════════════════════════════════
-//   Expo username:    @aninha64 (duarteharlley@gmail.com)
-//   GitHub repo:      https://github.com/HarlleyDu/Aninha-64
-//   Firebase projeto: pilula-ana
-//   Package Android:  com.harlley.aninha64
-//   EAS Project ID:   5433fd20-8302-4bb6-9834-e6e6255d0d2b
-//   Admin email:      Harlleyduarte@gmail.com
-//
-//   Firebase Config:
-//   apiKey:            AIzaSyChpMCwE1A8Yl3Cm4Oyhc0bJoXBJLSbPuo
-//   authDomain:        pilula-ana.firebaseapp.com
-//   databaseURL:       https://pilula-ana-default-rtdb.firebaseio.com
-//   projectId:         pilula-ana
-//   storageBucket:     pilula-ana.firebasestorage.app
-//   messagingSenderId: 1005101278287
-//   appId:             1:1005101278287:android:e749bbfad114aacbfd763a
-//
-// ════════════════════════════════════════════════════════════
-// 📊 ESQUEMA DO BANCO DE DADOS (não alterar)
-// ════════════════════════════════════════════════════════════
-//   /usuarios/{uid}
-//     nome, email, isAdmin, casalId, genero, criadoEm
-//     antrix, indPontos, streak
-//     itensComprados: { temas:[], selos:[], molduras:[] }
-//     seloEquipado, molduraEquipada
-//     titulosDesbloqueados, tituloEquipado
-//     conquistas, estatisticas
-//
-//   /casais/{casalId}
-//     historico/{"YYYY-MM-DD": {data, hora, tomou, quemMarcou}}
-//     pausa/{inicio, fim, ativa}
-//     pontos/{ana, harlley}
-//     fotos/{uid: "URL Storage"}
-//     tema: string (id do tema)
-//     membros/{uid: nome}
-//     sugestoes/ (lista push)
-//     dataInicio: "YYYY-MM-DD"
-//     config/horarioPessoal/{uid}: "HH:MM"
-//     mural/ (mensagens 24h)
-//
-//   /pairCodes/{chave6chars} → {casalId}  ← deletado após uso
-//   /config → {versao, apkUrl, changelog, forcarAtualizar}  ← OTA
-//
-// ════════════════════════════════════════════════════════════
-// 🎮 REGRAS DE NEGÓCIO (NUNCA REMOVER)
-// ════════════════════════════════════════════════════════════
-//   Janela de Ouro: 20:30 — 20:40
-//   - Tomou dentro → ponto para Ana
-//   - Tomou fora   → ponto para quem marcou
-//   - Streak só conta dentro da janela
-//
-//   Recompensas por streak:
-//   streak 0-1 → +10 pts, +5 Antrix
-//   streak 2   → +15 pts, +7 Antrix
-//   streak 3   → +20 pts, +10 Antrix
-//   streak 4   → +30 pts, +15 Antrix
-//   streak 5+  → +50 pts, +25 Antrix
-//
-//   Ciclos de 28 dias: diaCartela = totalDias % 28
-//   A cada 28 → confete animado
-//
-//   Pausa do Yazflex: dura 4 dias, admin inicia/encerra
-//
-//   Pareamento: chave 6 chars, deletada após uso
-//
-// ════════════════════════════════════════════════════════════
-// 📱 ABAS DO APP (8 abas)
-// ════════════════════════════════════════════════════════════
-//   🏠 home       → countdown, ConsistencyCircle, card status, botão marcar
-//   📅 calendario → histórico mensal navegável (admin pode editar)
-//   🏆 ranking    → pontos Ana vs Harlley + ranking global
-//   🛒 loja       → comprar temas/selos/molduras com Antrix
-//   🏅 conquistas → lista de conquistas e títulos
-//   💌 mural      → mensagens do casal (expiram em 24h)
-//   💡 sugestoes  → caixa de texto para sugestões
-//   👤 perfil     → foto, stats, customização, configurações
-//
-// ════════════════════════════════════════════════════════════
-// 🎨 LAYOUT (sem área vazia entre header e conteúdo)
-// ════════════════════════════════════════════════════════════
-//   Header compacto: paddingTop:14 (sem paddingTop:48)
-//   Tab bar fixa embaixo estilo Instagram
-//   O que NÃO pode existir: área vazia entre header e conteúdo
-//
-// ════════════════════════════════════════════════════════════
-// ☠️ LIVRO NEGRO — Erros conhecidos (nunca repetir)
-// ════════════════════════════════════════════════════════════
-//   ❌ expo-image-picker → PROIBIDO — usa URL externa para fotos
-//   ❌ uploadString com base64 → usar fetch(uri)→blob→uploadBytes
-//   ❌ setPersistence web API no RN → usar getReactNativePersistence
-//   ❌ ConsistencyCircle com RADIUS=(SW-80)/2 → tela inteira
-//   ❌ Estado inicial 'auth' → usar 'splash'
-//   ❌ PanResponder sem ref → usar abaAtivaRef para swipe correto
-//   ❌ Build sem EAS_SKIP_AUTO_FINGERPRINT=1 → fingerprint bug
-//   ❌ useState(true') — aspas corrompidas → sed fix antes de build
-//   ❌ makeStyles duplicado → grep -c "makeStyles" deve retornar 2
-//   ❌ Import duplicado StatusBar → manter só um
-//
-// ════════════════════════════════════════════════════════════
-// 🔧 COMANDOS
-// ════════════════════════════════════════════════════════════
-//   Deploy/teste via Expo Go (USE ISSO, não EAS para testes):
-//   cp /sdcard/Download/App_alpha_X_X_X.js ~/aninha64/App.js
-//   cd ~/aninha64 && npx expo start --lan
-//
-//   Build APK (só quando pronto para lançar):
-//   EAS_SKIP_AUTO_FINGERPRINT=1 eas build --platform android --profile preview --non-interactive
-//
-//   Checklist pré-build:
-//   grep "VERSAO_ATUAL" App.js
-//   grep -c "makeStyles" App.js          # deve retornar 2
-//   grep -n "function escolherFoto" App.js
-//   node --check App.js
-//
-// ════════════════════════════════════════════════════════════
-// 🔔 NOTIFICAÇÕES (3 agendamentos recorrentes)
-// ════════════════════════════════════════════════════════════
-//   Lembrete pessoal → horário definido pelo usuário
-//   Janela de Ouro   → 20:30
-//   Alerta tensão    → 20:35
-//
-// ════════════════════════════════════════════════════════════
-// 🛒 LOJA
-// ════════════════════════════════════════════════════════════
-//   Temas:   comum 20💠 | raro 80💠 | bonito 200💠 | lendário 500💠
-//   Selos:   comum 15💠 | raro 60💠 | lendário 300💠
-//   Molduras:comum 20💠 | raro 80💠 | lendário 300💠
-//   Admin: Antrix infinito (999999), desbloquear tudo
-//
-// ════════════════════════════════════════════════════════════
-// 🏆 CONQUISTAS
-// ════════════════════════════════════════════════════════════
-//   Verificadas em verificarTodasConquistas() após cada marcação.
-//   Concedem títulos com cor customizada exibidos no header.
-//
-// ════════════════════════════════════════════════════════════
-// 🔄 CHANGELOG
-// ════════════════════════════════════════════════════════════
-//   alpha 0.0.1 — countdown em segundos, botão verde na janela,
-//                 admin desbloquear conquistas, barra de abas menor
-//   alpha 0.0.2 — ConsistencyCircle compacto (80px), não ocupa tela
-//   alpha 0.0.3 — documentação completa no código
-//   alpha 0.0.4 — (incremento)
-//   alpha 0.0.5 — (incremento)
-//   alpha 0.0.6 — versão estável com todas as 8 abas funcionando
-//   alpha 0.0.14 — dossiê v2.0 embutido no código, versão atualizada
-//   alpha 0.0.15 — sistema de notificação por casal:
-//                  · Horário salvo em /usuarios/{uid}/horarioPessoal
-//                  · Só mulher pode definir horário (homem vê "—" no botão, não abre modal)
-//                  · Ao parear/salvar, horários das mulheres vão p/ /casais/{id}/config/horariosNotificacao
-//                  · Todos do casal recebem notificação em CADA horário registrado no casal
-//                  · 2 mulheres pareadas = ambas recebem nas 2 notificações (12:30 e 17:30)
-//                  · Homem pareado = recebe automaticamente no horário da parceira
-//                  · Home mostra aviso "Coloque seu horário" se for mulher sem horário definido
-//
-// ════════════════════════════════════════════════════════════
-// 💡 PRÓXIMAS MELHORIAS SUGERIDAS
-// ════════════════════════════════════════════════════════════
-//   - Foto maior no header (já pedido pelo Harlley)
-//   - Animação ao marcar a pílula
-//   - Notificação para o parceiro quando Ana marcar
-//   - Gráfico de adesão mensal na aba Ranking
-//   - Widget para tela inicial do Android
-//   - Som customizado ao marcar
-//   - Modo escuro/claro por horário do dia
-//
-// ════════════════════════════════════════════════════════════
-//
-// REGRA ABSOLUTA DE VERSIONAMENTO:
-//   Qualquer mudança = nova versão.
-//   Formato: alpha X.X.X
-//   Atualizar em 3 lugares obrigatórios:
-//     1. VERSAO_ATUAL neste arquivo (linha ~50)
-//     2. Nome do arquivo: App_alpha_X_X_X.js
-//     3. Visível no app: splash + parte inferior do perfil
-//
-// COMANDO PARA DEPLOY (copiar, commitar e abrir Expo Go):
-//   cp /sdcard/Download/App_alpha_X_X_X.js ~/aninha64/App.js && cd ~/aninha64 && git add App.js && git commit -m "alpha X.X.X" && git push origin main && npx expo start --lan
-//
-// ============================================================
-// IDENTIDADE DO PROJETO
-// ============================================================
-//   Nome:        Aninha 64 (também chamado Pílula da Ana)
-//   Tipo:        App privado de casal — NÃO publicado na Play Store
-//   Objetivo:    Garantir que Ana tome o Yazflex (anticoncepcional)
-//                no horário correto todos os dias
-//   Criador:     Harlley (harlleyduarte@gmail.com)
-//   Parceira:    Ana
+//   Admin:    Harlley (Harlleyduarte@gmail.com)
+//   Distribuição: APK via MediaFire/GitHub
+//   Package:  com.harlley.aninha64
 //
 // ============================================================
 // STACK TÉCNICA
@@ -242,7 +40,7 @@
 // ============================================================
 //   Expo username:   @aninha64 (duarteharlley@gmail.com)
 //   GitHub repo:     https://github.com/HarlleyDu/Aninha-64
-//   Firebase projeto:pilula-ana
+//   Firebase projeto: aninha-64
 //   Package Android: com.harlley.aninha64
 //   EAS Project ID:  5433fd20-8302-4bb6-9834-e6e6255d0d2b
 //   Admin email:     Harlleyduarte@gmail.com
@@ -261,7 +59,7 @@
 //   /casais/{casalId}
 //     historico/{"YYYY-MM-DD": {data, hora, tomou, quemMarcou}}
 //     pausa/{inicio, fim, ativa}
-//     pontos/{ana, harlley}
+//     pontos/{uid1: pts, uid2: pts}  ← indexado por uid, genérico
 //     fotos/{uid: "URL Storage"}
 //     tema: string (id do tema)
 //     membros/{uid: nome}
@@ -276,7 +74,7 @@
 // ============================================================
 // MECÂNICA SAGRADA — JANELA DE OURO (NUNCA REMOVER)
 // ============================================================
-//   Horário: 20:30 — 20:40
+//   Horário: definido pela mulher da dupla ± 10 min
 //   - Tomou dentro da janela → ponto para Ana
 //   - Tomou fora da janela   → ponto para quem marcou
 //   - Ciclo de 28 dias       → confete + nova cartela
@@ -356,13 +154,13 @@ import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
 } from 'firebase/auth';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyChpMCwE1A8Yl3Cm4Oyhc0bJoXBJLSbPuo",
-  authDomain: "pilula-ana.firebaseapp.com",
-  databaseURL: "https://pilula-ana-default-rtdb.firebaseio.com",
-  projectId: "pilula-ana",
-  storageBucket: "pilula-ana.firebasestorage.app",
-  messagingSenderId: "1005101278287",
-  appId: "1:1005101278287:android:e749bbfad114aacbfd763a"
+  apiKey: "AIzaSyDd7KKg2c7DEnlGADbUApV3bMsRvmjV_ro",
+  authDomain: "aninha-64.firebaseapp.com",
+  databaseURL: "https://aninha-64-default-rtdb.firebaseio.com",
+  projectId: "aninha-64",
+  storageBucket: "aninha-64.firebasestorage.app",
+  messagingSenderId: "777356459597",
+  appId: "1:777356459597:android:9c98335212f8c981742604"
 };
 
 let firebaseApp, db, auth;
@@ -376,10 +174,9 @@ try {
   console.error("Firebase Init Error:", e);
 }
 
-const VERSAO_ATUAL  = "alpha 0.0.15";
+const VERSAO_ATUAL  = "alpha 0.0.18";
 const ADMIN_EMAIL   = "Harlleyduarte@gmail.com";
-const JANELA_INICIO = { h: 20, m: 30 };
-const JANELA_FIM    = { h: 20, m: 40 };
+const JANELA_TOLERANCIA_MIN = 10; // janela de ouro = horário definido ± 10 min
 const { width: SW } = Dimensions.get('window');
 
 const TEMAS_BASE = {
@@ -458,7 +255,7 @@ const ITENS_LOJA = {
       { id: 'dream_love', nome: 'Dream Love', preco: 200, cor: '#cdb4db' }
     ],
     lendario: [
-      { id: 'ana_harlley', nome: 'Ana & Harlley', preco: 500, cor: '#ff2d78' },
+      { id: 'duo_especial', nome: 'Duo Especial', preco: 500, cor: '#ff2d78' },
       { id: 'coracao_negro', nome: 'Coraçãozinho Negro', preco: 500, cor: '#000000', destaque: '#ff2d78' },
       { id: 'amor_desenho', nome: 'Amor de Desenho', preco: 500, cor: '#ffaa66' },
       { id: 'amor_dois', nome: 'Amor a Dois', preco: 500, cor: '#ff66cc' },
@@ -504,8 +301,8 @@ const ITENS_LOJA = {
       { id: 'assinatura_desenho', nome: 'Assinatura desenhada', preco: 300, emoji: '✍️' },
       { id: 'marca_criador', nome: 'Marca exclusiva do criador', preco: 300, emoji: '🎨' },
       { id: 'animado_futuro', nome: 'Emoji especial animado', preco: 300, emoji: '✨' },
-      { id: 'assinatura_ana', nome: 'Emoji assinatura Ana', preco: 300, emoji: '👩‍❤️‍👨' },
-      { id: 'assinatura_harlley', nome: 'Emoji assinatura Harlley', preco: 300, emoji: '💘' }
+      { id: 'assinatura_duo', nome: 'Emoji dupla especial', preco: 300, emoji: '👩‍❤️‍👨' },
+      { id: 'assinatura_criador', nome: 'Emoji exclusivo', preco: 300, emoji: '💘' }
     ]
   },
   molduras: {
@@ -641,7 +438,7 @@ Notifications.setNotificationHandler({
 
 // Círculo de consistência compacto — não ocupa a tela toda
 function ConsistencyCircle({ historico, dataInicio, tema }) {
-  // Yazflex: cartela de 30 dias
+  // Ciclo de 30 dias
   const TOTAL = 30;
   const SIZE  = 88;
   const R     = SIZE / 2;
@@ -739,7 +536,7 @@ export default function App() {
   const [codigoGerado, setCodigoGerado] = useState('');
   const [historico, setHistorico] = useState({});
   const [pausa, setPausa] = useState(null);
-  const [pontos, setPontos] = useState({ ana: 0, harlley: 0 });
+  const [pontos, setPontos] = useState({});
   const [dataInicio, setDataInicio] = useState(null);
   const [fotos, setFotos] = useState({});
   const [temaAtualId, setTemaAtualId] = useState('roxo');
@@ -801,23 +598,32 @@ export default function App() {
 
   const fadeAmor = useRef(new Animated.Value(0)).current;
   const pulseBtn = useRef(new Animated.Value(1)).current;
-  const slideAnim = useRef(new Animated.Value(0)).current;
-  const fadeTabAnim = useRef(new Animated.Value(1)).current;
-  const [abaAnterior, setAbaAnterior] = useState('home');
   const [modalPerfilUsuario, setModalPerfilUsuario] = useState(false);
   const [perfilUsuarioVisto, setPerfilUsuarioVisto] = useState(null);
   const [confete, setConfete] = useState(false);
 
-  // 🆕 NOVO alpha 0.0.1: Countdown em segundos até a Janela de Ouro
+  // alpha 0.0.18: Countdown dinâmico baseado no horário da dupla (± JANELA_TOLERANCIA_MIN)
   const [countdown, setCountdown] = useState('');
   const [naJanela, setNaJanela] = useState(false);
   useEffect(() => {
     const tick = () => {
+      const horariosDoCalsal = casalConfig?.horariosNotificacao || {};
+      const ehMulherLocal = perfil?.genero === 'mulher';
+      const horarioRef = ehMulherLocal
+        ? (perfil?.horarioPessoal || null)
+        : (Object.values(horariosDoCalsal)[0] || null);
+      if (!horarioRef) {
+        setCountdown('⏰ Defina o horário da rotina');
+        setNaJanela(false);
+        return;
+      }
+      const [hRef, mRef] = horarioRef.split(':').map(Number);
       const agora = new Date();
-      const totalMin = agora.getHours() * 60 + agora.getMinutes();
-      const totalSeg = totalMin * 60 + agora.getSeconds();
-      const inicioSeg = JANELA_INICIO.h * 3600 + JANELA_INICIO.m * 60;
-      const fimSeg   = JANELA_FIM.h   * 3600 + JANELA_FIM.m   * 60;
+      const totalSeg = agora.getHours() * 3600 + agora.getMinutes() * 60 + agora.getSeconds();
+      const centroDaSeg = hRef * 3600 + mRef * 60;
+      const tolerSeg = JANELA_TOLERANCIA_MIN * 60;
+      const inicioSeg = centroDaSeg - tolerSeg;
+      const fimSeg    = centroDaSeg + tolerSeg;
       if (totalSeg >= inicioSeg && totalSeg <= fimSeg) {
         const restante = fimSeg - totalSeg;
         const mm = Math.floor(restante / 60);
@@ -826,7 +632,8 @@ export default function App() {
         setNaJanela(true);
       } else {
         setNaJanela(false);
-        let alvo = new Date(); alvo.setHours(JANELA_INICIO.h, JANELA_INICIO.m, 0, 0);
+        let alvo = new Date();
+        alvo.setHours(hRef, mRef - JANELA_TOLERANCIA_MIN, 0, 0);
         if (alvo <= agora) alvo.setDate(alvo.getDate() + 1);
         const diff = Math.floor((alvo - agora) / 1000);
         const hh = Math.floor(diff / 3600);
@@ -838,35 +645,61 @@ export default function App() {
     tick();
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [perfil?.horarioPessoal, perfil?.genero, casalConfig]);
 
   // ── FIX SWIPE: 8 abas (removido 'conectar') ──
   const ABAS = ['home', 'calendario', 'ranking', 'conquistas', 'mural', 'sugestoes', 'perfil'];
 
   // ── FIX SWIPE: PanResponder usa ref para aba atual ──
+  const slideAnim    = useRef(new Animated.Value(0)).current; // mantido para compatibilidade
+  const fadeTabAnim  = useRef(new Animated.Value(1)).current; // mantido para compatibilidade
+
+  // alpha 0.0.16: swipe que acompanha o dedo em tempo real (estilo Android)
+  const swipeX = useRef(new Animated.Value(0)).current;
+
   function trocarAba(nova, direcao = 1) {
-    slideAnim.setValue(direcao * SW * 0.4);
-    fadeTabAnim.setValue(0.4);
     abaAtivaRef.current = nova;
     setAbaAtiva(nova);
-    Animated.parallel([
-      Animated.timing(slideAnim, { toValue: 0, duration: 220, useNativeDriver: true }),
-      Animated.timing(fadeTabAnim, { toValue: 1, duration: 220, useNativeDriver: true }),
-    ]).start();
+    // Entra do lado correto e desliza para 0
+    swipeX.setValue(direcao * SW);
+    Animated.spring(swipeX, {
+      toValue: 0,
+      useNativeDriver: true,
+      damping: 20,
+      stiffness: 180,
+      mass: 0.8,
+    }).start();
   }
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, g) =>
-        Math.abs(g.dx) > 30 && Math.abs(g.dx) > Math.abs(g.dy) * 3,
+        Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
+      onPanResponderMove: (_, g) => {
+        // Acompanha o dedo em tempo real com resistência nas bordas
+        const idx = ABAS.indexOf(abaAtivaRef.current);
+        const naEsquerda = idx === 0 && g.dx > 0;
+        const naDireita  = idx === ABAS.length - 1 && g.dx < 0;
+        if (naEsquerda || naDireita) {
+          swipeX.setValue(g.dx * 0.2); // resistência na borda
+        } else {
+          swipeX.setValue(g.dx);
+        }
+      },
       onPanResponderRelease: (_, g) => {
         const idx = ABAS.indexOf(abaAtivaRef.current);
-        if (g.dx < -80 && idx < ABAS.length - 1) {
+        if (g.dx < -50 && Math.abs(g.vx) > 0.1 && idx < ABAS.length - 1) {
           trocarAba(ABAS[idx + 1], 1);
-        } else if (g.dx > 80 && idx > 0) {
+        } else if (g.dx > 50 && Math.abs(g.vx) > 0.1 && idx > 0) {
           trocarAba(ABAS[idx - 1], -1);
+        } else {
+          // Volta para o lugar com spring
+          Animated.spring(swipeX, { toValue: 0, useNativeDriver: true, damping: 20, stiffness: 200 }).start();
         }
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(swipeX, { toValue: 0, useNativeDriver: true, damping: 20, stiffness: 200 }).start();
       },
     })
   ).current;
@@ -916,6 +749,30 @@ export default function App() {
     if (casalId) { iniciarListeners(casalId); return () => pararListeners(); }
   }, [casalId]);
 
+  // alpha 0.0.16: marca automaticamente dias perdidos após fim da pausa
+  // Se passou do fim da pausa e não tomou no dia seguinte até 00:00, marca falta
+  useEffect(() => {
+    if (!casalId || !pausa?.fim || !dataInicio) return;
+    const fimPausa = pausa.fim; // "YYYY-MM-DD"
+    const diaApos  = addDias(fimPausa, 1); // primeiro dia que deve tomar de novo
+    if (hoje <= fimPausa) return; // ainda em pausa ou hoje é o último dia
+    // Verifica cada dia a partir do diaApos até ontem
+    const verificarFaltas = async () => {
+      let cur = diaApos;
+      const ontem = addDias(hoje, -1);
+      while (cur <= ontem) {
+        if (!historico[cur] && cur >= dataInicio) {
+          // Dia perdido — marca como não tomado no histórico
+          await set(ref(db, `casais/${casalId}/historico/${cur}`), {
+            data: cur, hora: null, tomou: false, quemMarcou: null, faltaAutomatica: true,
+          });
+        }
+        cur = addDias(cur, 1);
+      }
+    };
+    verificarFaltas();
+  }, [casalId, pausa?.fim, historico, hoje]);
+
   // Animação leve contínua do título secreto (brilho pulsante ao redor)
   useEffect(() => {
     const glow = Animated.loop(Animated.sequence([
@@ -927,7 +784,7 @@ export default function App() {
   }, []);
 
   function resetEstado() {
-    setHistorico({}); setPausa(null); setPontos({ ana: 0, harlley: 0 });
+    setHistorico({}); setPausa(null); setPontos({});
     setDataInicio(null); setFotos({}); setCasalId(null); setPerfil(null); setCasalConfig({});
     setAntrix(0); setIndPontos(0); setStreak(0);
     setItensComprados({ temas: [], selos: [], molduras: [] });
@@ -1119,6 +976,26 @@ export default function App() {
       if (status !== 'granted') return;
       await Notifications.cancelAllScheduledNotificationsAsync();
 
+      // alpha 0.0.18: verifica se o parceiro desta dupla é o admin (email fixo)
+      // Se sim → notificações especiais; caso contrário → genéricas
+      let temNotifEspecial = false;
+      try {
+        const membrosSnap = await get(ref(db, `casais/${cid}/membros`));
+        if (membrosSnap.exists()) {
+          const membrosUids = Object.keys(membrosSnap.val()).filter(u => u !== authUser?.uid);
+          for (const uid of membrosUids) {
+            const emailSnap = await get(ref(db, `usuarios/${uid}/email`));
+            if (emailSnap.exists() && emailSnap.val().toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+              temNotifEspecial = true; break;
+            }
+          }
+          // Também vale se o próprio usuário for o admin (ele recebe notif especial para si)
+          if (!temNotifEspecial && perfil?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+            temNotifEspecial = true;
+          }
+        }
+      } catch(_) {}
+
       // Busca todos os horários registrados no casal
       const cfgSnap = await get(ref(db, `casais/${cid}/config/horariosNotificacao`));
       const horariosObj = cfgSnap.exists() ? cfgSnap.val() : {};
@@ -1132,25 +1009,35 @@ export default function App() {
         await Notifications.scheduleNotificationAsync({
           identifier: `lembrete_casal_${i}`,
           content: {
-            title: '💊 Hora do remédio, meu amor!',
-            body: `São ${h} — não esquece de tomar o Yazflex! 💕`,
+            title: temNotifEspecial ? '💊 Hora da rotina, meu amor!' : '💊 Hora da sua rotina!',
+            body: temNotifEspecial ? `São ${h} — não esquece de tomar, meu amor! 💕` : `São ${h} — hora da sua rotina! 💊`,
             sound: true,
           },
           trigger: { hour: hh, minute: mm, repeats: true },
         });
       }
 
-      // Janela de Ouro — para todos sempre
-      await Notifications.scheduleNotificationAsync({
-        identifier: 'janela_ouro',
-        content: { title: '🌟 Janela de Ouro aberta!', body: 'Tome o Yazflex agora! 20:30–20:40 💊💕', sound: true },
-        trigger: { hour: JANELA_INICIO.h, minute: JANELA_INICIO.m, repeats: true },
-      });
-      await Notifications.scheduleNotificationAsync({
-        identifier: 'modo_tensao',
-        content: { title: '⚠️ Janela fechando!', body: 'Faltam 5 min para o fim da Janela de Ouro!', sound: true },
-        trigger: { hour: JANELA_FIM.h, minute: JANELA_FIM.m - 5, repeats: true },
-      });
+      // alpha 0.0.18: notificação de alerta 5 min antes do fim da janela (dinâmica)
+      for (let i = 0; i < horarios.length; i++) {
+        const h = horarios[i];
+        const [hh2, mm2] = h.split(':').map(Number);
+        // Calcula minuto do fechamento da janela
+        const fimMin = mm2 + JANELA_TOLERANCIA_MIN;
+        const fimHH = fimMin >= 60 ? hh2 + 1 : hh2;
+        const fimMM = fimMin >= 60 ? fimMin - 60 : fimMin;
+        // Alerta 5 min antes do fechamento = início - 5 min
+        const alertaMM = mm2 - JANELA_TOLERANCIA_MIN + JANELA_TOLERANCIA_MIN - 5; // = mm2 - 5
+        const alertaMin = mm2 - 5 < 0 ? 60 + (mm2 - 5) : mm2 - 5;
+        const alertaHH  = mm2 - 5 < 0 ? hh2 - 1 : hh2;
+        const alertaTxt = temNotifEspecial
+          ? '⚠️ Janela fechando em breve, meu amor! 💕'
+          : '⚠️ Janela da rotina fechando em 5 min!';
+        await Notifications.scheduleNotificationAsync({
+          identifier: `janela_alerta_${i}`,
+          content: { title: '⚠️ Quase no horário!', body: alertaTxt, sound: true },
+          trigger: { hour: alertaHH < 0 ? 23 : alertaHH, minute: alertaMin, repeats: true },
+        });
+      }
     } catch(e) { console.warn("Erro notificações:", e); }
   }
 
@@ -1158,12 +1045,17 @@ export default function App() {
   async function notificarParceiro(horaMarcado) {
     if (!casalId || !parceiro) return;
     try {
-      // Busca token FCM do parceiro
-      const parceiroSnap = await get(ref(db, `usuarios/${parceiro.uid}/fcmToken`));
-      const tokenParceiro = parceiroSnap.exists() ? parceiroSnap.val() : null;
-      const nomeMeu = perfil?.nome || 'Sua parceira';
-      // Push FCM real (chega mesmo com app fechado)
-      await enviarPushFcm(tokenParceiro, '💊 Pílula tomada!', `${nomeMeu} tomou o Yazflex às ${horaMarcado}! ✅💕`);
+      // Busca token FCM e email do parceiro
+      const parceiroSnap = await get(ref(db, `usuarios/${parceiro.uid}`));
+      const parceiroData = parceiroSnap.exists() ? parceiroSnap.val() : {};
+      const tokenParceiro = parceiroData.fcmToken || null;
+      const nomeMeu = perfil?.nome || 'Seu parceiro(a)';
+      // alpha 0.0.18: mensagem especial se o parceiro for o admin (email fixo)
+      const parceiroEhAdmin = (parceiroData.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase();
+      const pushBody = parceiroEhAdmin
+        ? `${nomeMeu} tomou às ${horaMarcado}! Orgulho de você, meu amor! ✅💕`
+        : `${nomeMeu} completou a rotina às ${horaMarcado}! ✅`;
+      await enviarPushFcm(tokenParceiro, '✅ Rotina concluída!', pushBody);
     } catch(e) { console.warn('notificarParceiro error:', e); }
   }
 
@@ -1232,6 +1124,13 @@ export default function App() {
       const snap = await get(ref(db, `pairCodes/${code}`));
       if (snap.exists()) {
         const { casalId: cid } = snap.val();
+        // alpha 0.0.18: máximo 2 membros por dupla
+        const membrosSnap = await get(ref(db, `casais/${cid}/membros`));
+        const membrosAtuais = membrosSnap.exists() ? Object.keys(membrosSnap.val()) : [];
+        if (membrosAtuais.length >= 2 && !membrosAtuais.includes(authUser.uid)) {
+          Alert.alert('Dupla cheia', 'Esta dupla já tem 2 membros. Cada dupla aceita no máximo 2 pessoas.');
+          setPairLoading(false); return;
+        }
         await set(ref(db, `casais/${cid}/membros/${authUser.uid}`), perfil.nome);
         await set(ref(db, `usuarios/${authUser.uid}/casalId`), cid);
         await remove(ref(db, `pairCodes/${code}`));
@@ -1286,7 +1185,7 @@ export default function App() {
         await configurarAlarmes(casalId);
       }
       setModalHorario(false);
-      Alert.alert('✅ Salvo', `Lembrete: ${horario}\nSeu parceiro também será notificado! 💕`);
+      Alert.alert('✅ Salvo', `Lembrete: ${horario}\nSeu parceiro(a) também será notificado(a)!`);
     } catch(e) { Alert.alert('Erro', 'Falha ao salvar horário.'); }
   }
 
@@ -1463,10 +1362,12 @@ export default function App() {
       const noHorarioCerto = meuHorarioPessoal
         ? estaDentroJanela(meuHorarioPessoal, 10, agora)
         : naJanela;
-      const quemSouEu = (perfil?.nome || '').toLowerCase().includes('harlley') ? 'harlley' : 'ana';
+      // alpha 0.0.18: pontos indexados por uid — genérico para qualquer dupla
       const np = { ...pontos };
-      if (naJanela) np.ana = (np.ana || 0) + 1;
-      else np[quemSouEu] = (np[quemSouEu] || 0) + 1;
+      // quem ganhou o ponto: se na janela, é a mulher da dupla; senão, quem marcou
+      const uidMulher = Object.entries(casalConfig?.horariosNotificacao || {}).map(([k]) => k)[0] || authUser.uid;
+      const uidGanha = naJanela ? uidMulher : authUser.uid;
+      np[uidGanha] = (np[uidGanha] || 0) + 1;
       await set(ref(db, `casais/${casalId}/pontos`), np);
       await set(ref(db, `casais/${casalId}/historico/${hoje}`), {
         data: hoje, hora, tomou: true, quemMarcou: authUser.uid,
@@ -1495,7 +1396,7 @@ export default function App() {
         Animated.timing(fadeAmor, { toValue: 0, duration: 500, useNativeDriver: true }),
       ]).start(() => setModalAmor(false));
       await notificarParceiro(hora);
-      Alert.alert('✅ Tomou!', `+${pontosGanhos} pts, +${antrixGanho} Antrix! Streak: ${novoStreak}`);
+      Alert.alert('✅ Feito!', `+${pontosGanhos} pts, +${antrixGanho} Antrix! Streak: ${novoStreak}`);
     } catch(e) { Alert.alert('Erro', 'Falha ao registrar.'); }
   }
 
@@ -1599,7 +1500,9 @@ O relatório será salvo no app.`;
   }
 
   async function iniciarPausa() {
-    try { await set(ref(db, `casais/${casalId}/pausa`), { inicio: hoje, fim: addDias(hoje, 4), ativa: true }); }
+    // Pausa dura 4 dias: início = hoje, fim = hoje + 3 (4 dias inclusive)
+    // Ex: clicou dia 1 → fim = dia 4 → dia 5 já é obrigatório tomar
+    try { await set(ref(db, `casais/${casalId}/pausa`), { inicio: hoje, fim: addDias(hoje, 3), ativa: true }); }
     catch(e) {}
   }
 
@@ -1646,7 +1549,8 @@ O relatório será salvo no app.`;
       const snapshot = await get(ref(db, 'usuarios'));
       if (snapshot.exists()) {
         const data = snapshot.val();
-        let lista = Object.values(data).map(u => ({ nome: u.nome, pontos: u.indPontos || 0, antrix: u.antrix || 0, streak: u.streak || 0 }));
+        // alpha 0.0.18: ranking global expõe APENAS nome + pontos — sem email, casalId, streak, antrix
+        let lista = Object.values(data).map(u => ({ nome: u.nome || '???', pontos: u.indPontos || 0 }));
         lista.sort((a, b) => b.pontos - a.pontos);
         setGlobalRanking(lista);
       } else { setGlobalRanking([]); }
@@ -1729,7 +1633,7 @@ O relatório será salvo no app.`;
   if (tela === 'splash') return (
     <View style={s.splash}>
       <Text style={s.splashEmoji}>💊</Text>
-      <Text style={s.splashTitle}>Pílula da Ana</Text>
+      <Text style={s.splashTitle}>DuoTrack 💊</Text>
       <Text style={{ color: '#555', marginTop: 4 }}>v{VERSAO_ATUAL}</Text>
       <ActivityIndicator color="#ff2d78" style={{ marginTop: 20 }} />
     </View>
@@ -1738,7 +1642,7 @@ O relatório será salvo no app.`;
   if (tela === 'auth') return (
     <ScrollView contentContainerStyle={s.authWrap} keyboardShouldPersistTaps="handled">
       <Text style={s.splashEmoji}>💊</Text>
-      <Text style={s.splashTitle}>Pílula da Ana</Text>
+      <Text style={s.splashTitle}>DuoTrack 💊</Text>
       <Text style={s.authSub}>{authMode === 'login' ? 'Entrar na conta' : 'Criar conta'}</Text>
       {authMode === 'cadastro' && <TextInput style={s.input} placeholder="Seu nome" placeholderTextColor="#555" value={authNome} onChangeText={setAuthNome} />}
       <TextInput style={s.input} placeholder="Email" placeholderTextColor="#555" value={authEmail} onChangeText={setAuthEmail} autoCapitalize="none" keyboardType="email-address" />
@@ -1756,7 +1660,7 @@ O relatório será salvo no app.`;
   if (tela === 'pair') return (
     <ScrollView contentContainerStyle={s.authWrap}>
       <Text style={{ fontSize: 52, marginBottom: 16 }}>💕</Text>
-      <Text style={s.splashTitle}>Conectar dupla</Text>
+      <Text style={s.splashTitle}>Conectar dupla 🤝</Text>
       <Text style={s.authSub}>Olá, {nomeAtual}!</Text>
       {pairStep === 'menu' && <>
         <TouchableOpacity style={s.btnPrimary} onPress={criarCasal} disabled={pairLoading}><Text style={s.btnPrimaryTxt}>✨ Criar nova dupla</Text></TouchableOpacity>
@@ -2238,7 +2142,7 @@ O relatório será salvo no app.`;
             {tituloEquipado && titulosDesbloqueados[tituloEquipado] && (
               <Text style={{ fontSize: 10, color: titulosDesbloqueados[tituloEquipado].cor }}>{titulosDesbloqueados[tituloEquipado].titulo}</Text>
             )}
-            <Text style={s.headerSub}>{parceiro ? `💞 ${parceiro.nome}` : '💔 Sozinho'}</Text>
+            <Text style={s.headerSub}>{parceiro ? `💞 ${parceiro.nome}` : 'Sem parceiro(a)'}</Text>
           </View>
         </TouchableOpacity>
         <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -2248,7 +2152,7 @@ O relatório será salvo no app.`;
         </View>
       </View>
 
-      <Animated.View style={{ flex: 1, transform: [{ translateX: slideAnim }], opacity: fadeTabAnim }}>
+      <Animated.View style={{ flex: 1, transform: [{ translateX: swipeX }] }}>
       <ScrollView style={s.body} contentContainerStyle={s.bodyContent} {...panResponder.panHandlers}>
 
         {/* HOME */}
@@ -2323,9 +2227,9 @@ O relatório será salvo no app.`;
               const start = new Date(calAno, calMes, 1).getDay();
               const days = diasNoMes(calMes, calAno); const cells = [];
               const hojeDate = new Date(); const hojeAno = hojeDate.getFullYear(); const hojeMes = hojeDate.getMonth(); const hojeDia = hojeDate.getDate();
-              // Calcular dias de pausa para destacar
+              // Dias de pausa — só marca se admin iniciou (pausa.ativa === true)
               const pausaDias = new Set();
-              if (pausa?.inicio && pausa?.fim) {
+              if (pausa?.ativa && pausa?.inicio && pausa?.fim) {
                 let cur = new Date(pausa.inicio + 'T12:00:00');
                 const fim = new Date(pausa.fim + 'T12:00:00');
                 while (cur <= fim) {
@@ -2441,7 +2345,7 @@ O relatório será salvo no app.`;
 
         {/* MURAL */}
         {abaAtiva === 'mural' && <>
-          <Text style={s.secLabel}>💌 Mural do Amor</Text>
+          <Text style={s.secLabel}>💌 Mural da Dupla</Text>
           <Text style={[s.authSub, { textAlign: 'left', color: tema.sub, marginBottom: 8 }]}>Mensagens das últimas 24h</Text>
           {mensagensMural.length === 0 && <Text style={s.authSub}>Nenhuma mensagem ainda. Deixe um recado!</Text>}
           {mensagensMural.map(item => (
@@ -2463,8 +2367,8 @@ O relatório será salvo no app.`;
               <Text style={[s.btnSecondaryTxt, { color: '#ff4444' }]}>🗑️ Limpar todo o mural</Text>
             </TouchableOpacity>
           )}
-          <TextInput style={[s.input, { marginTop: 10 }]} placeholder="Escreva uma mensagem de amor..." placeholderTextColor="#555" value={novaMensagem} onChangeText={setNovaMensagem} multiline />
-          <TouchableOpacity style={s.btnPrimary} onPress={enviarMensagem}><Text style={s.btnPrimaryTxt}>💌 Enviar mensagem</Text></TouchableOpacity>
+          <TextInput style={[s.input, { marginTop: 10 }]} placeholder="Escreva uma mensagem..." placeholderTextColor="#555" value={novaMensagem} onChangeText={setNovaMensagem} multiline />
+          <TouchableOpacity style={s.btnPrimary} onPress={enviarMensagem}><Text style={s.btnPrimaryTxt}>💌 Enviar</Text></TouchableOpacity>
         </>}
 
         {/* SUGESTÕES */}
