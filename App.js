@@ -66,7 +66,7 @@ import * as Notifications from "expo-notifications";
 //     membros/{uid: nome}
 //     sugestoes/ (lista push)
 //     dataInicio: "YYYY-MM-DD"
-//     config/horario || "20:30"Pessoal/{uid}: "HH:MM"
+//     config/horarioPessoal/{uid}: "HH:MM"
 //     mural/ (mensagens 24h)
 //
 //   /pairCodes/{chave6chars} → {casalId} (deletado após uso)
@@ -420,7 +420,7 @@ const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
 
 const estaDentroJanela = (horario = "20:30", tolerMin = 10, agora = new Date()) => {
   if (!horario) return false;
-  const [h, m] = (horario || "20:30").split(':').map(Number);
+  const [h, m] = (horario).split(':').map(Number);
   const r = new Date(agora); r.setHours(h, m, 0, 0);
   return Math.abs(agora.getTime() - r.getTime()) / 60000 <= tolerMin;
 };
@@ -486,7 +486,7 @@ function ConsistencyCircle({ historico, dataInicio, tema }) {
   const diasPassados = (() => {
     // Se hoje ainda não passou do horário da pílula + tolerância, não conta hoje como passado
     const agora = new Date();
-    const [h, m] = (horario || "20:30" || '20:30').split(':').map(Number);
+    const [h, m] = (horario || '20:30').split(':').map(Number);
     const limiteHoje = new Date();
     limiteHoje.setHours(h, m + JANELA_TOLERANCIA_MIN, 0, 0);
     
@@ -511,7 +511,7 @@ function ConsistencyCircle({ historico, dataInicio, tema }) {
     
     // Lógica para cor do dot: só fica vermelho se o dia já passou do horário limite
     const agora = new Date();
-    const [h, m] = (horario || "20:30" || '20:30').split(':').map(Number);
+    const [h, m] = (horario || '20:30').split(':').map(Number);
     const limiteHoje = new Date();
     limiteHoje.setHours(h, m + JANELA_TOLERANCIA_MIN, 0, 0);
     
@@ -648,17 +648,17 @@ export default function App() {
   useEffect(() => {
   pedirPermissaoNotificacao();
     const tick = () => {
-      const horario || "20:30"sDoCalsal = casalConfig?.horario || "20:30"sNotificacao || {};
+      const horariosDoCalsal = casalConfig?.horariosNotificacao || {};
       const ehMulherLocal = perfil?.genero === 'mulher';
-      const horario || "20:30"Ref = ehMulherLocal
-        ? (perfil?.horario || "20:30"Pessoal || null)
-        : (Object.values(horario || "20:30"sDoCalsal)[0] || null);
-      if (!horario || "20:30"Ref) {
+      const horarioRef = ehMulherLocal
+        ? (perfil?.horarioPessoal || null)
+        : (Object.values(horariosDoCalsal)[0] || null);
+      if (!horarioRef) {
         setCountdown('⏰ Defina o horário da rotina');
         setNaJanela(false);
         return;
       }
-      const [hRef, mRef] = horario || "20:30"Ref.split(':').map(Number);
+      const [hRef, mRef] = horarioRef.split(':').map(Number);
       const agora = new Date();
       const totalSeg = agora.getHours() * 3600 + agora.getMinutes() * 60 + agora.getSeconds();
       const centroDaSeg = hRef * 3600 + mRef * 60;
@@ -686,7 +686,7 @@ export default function App() {
     tick();
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
-  }, [perfil?.horario || "20:30"Pessoal, perfil?.genero, casalConfig]);
+  }, [perfil?.horarioPessoal, perfil?.genero, casalConfig]);
 
   // ── FIX SWIPE: 8 abas (removido 'conectar') ──
   const ABAS = ['home', 'calendario', 'ranking', 'conquistas', 'mural', 'sugestoes', 'perfil'];
@@ -912,7 +912,7 @@ export default function App() {
         if (snap.exists()) {
           const cfg = snap.val();
           setCasalConfig(cfg);
-          // Reagenda notificações automaticamente se horario || "20:30"sNotificacao mudar
+          // Reagenda notificações automaticamente se horariosNotificacao mudar
           // (ex: parceira salvou horário novo → app do parceiro reagenda na hora)
           configurarAlarmes(cid);
         }
@@ -1010,9 +1010,9 @@ export default function App() {
 
   // ── alpha 0.0.15: configurarAlarmes ──────────────────────────────────────────
   // Lógica de notificação por casal:
-  //   · Cada mulher salva seu horário em /usuarios/{uid}/horario || "20:30"Pessoal
+  //   · Cada mulher salva seu horário em /usuarios/{uid}/horarioPessoal
   //   · Ao salvar/parear, horários das mulheres do casal vão pra
-  //     /casais/{cid}/config/horario || "20:30"sNotificacao (objeto { uid: "HH:MM", ... })
+  //     /casais/{cid}/config/horariosNotificacao (objeto { uid: "HH:MM", ... })
   //   · configurarAlarmes lê esses horários e agenda uma notificação local
   //     para CADA horário — todos os membros do casal recebem igual
   //   · Homem não tem horário próprio: só recebe via casal
@@ -1045,14 +1045,14 @@ export default function App() {
       } catch(_) {}
 
       // Busca todos os horários registrados no casal
-      const cfgSnap = await get(ref(db, `casais/${cid}/config/horario || "20:30"sNotificacao`));
-      const horario || "20:30"sObj = cfgSnap.exists() ? cfgSnap.val() : {};
+      const cfgSnap = await get(ref(db, `casais/${cid}/config/horariosNotificacao`));
+      const horariosObj = cfgSnap.exists() ? cfgSnap.val() : {};
       // Deduplica horários (caso 2 mulheres tenham o mesmo)
-      const horario || "20:30"s = [...new Set(Object.values(horario || "20:30"sObj))].filter(h => /^\d{2}:\d{2}$/.test(h));
+      const horarios = [...new Set(Object.values(horariosObj))].filter(h => /^\d{2}:\d{2}$/.test(h));
 
       // Agenda uma notificação local para cada horário do casal
-      for (let i = 0; i < horario || "20:30"s.length; i++) {
-        const h = horario || "20:30"s[i];
+      for (let i = 0; i < horarios.length; i++) {
+        const h = horarios[i];
         const [hh, mm] = h.split(':').map(Number);
         await Notifications.scheduleNotificationAsync({
           identifier: `lembrete_casal_${i}`,
@@ -1066,8 +1066,8 @@ export default function App() {
       }
 
       // alpha 0.0.18: notificação de alerta 5 min antes do fim da janela (dinâmica)
-      for (let i = 0; i < horario || "20:30"s.length; i++) {
-        const h = horario || "20:30"s[i];
+      for (let i = 0; i < horarios.length; i++) {
+        const h = horarios[i];
         const [hh2, mm2] = h.split(':').map(Number);
         // Calcula minuto do fechamento da janela
         const fimMin = mm2 + JANELA_TOLERANCIA_MIN;
@@ -1183,8 +1183,8 @@ export default function App() {
         await set(ref(db, `usuarios/${authUser.uid}/casalId`), cid);
         await remove(ref(db, `pairCodes/${code}`));
         // Se for mulher com horário salvo, copia para o casal agora
-        if (perfil?.genero === 'mulher' && perfil?.horario || "20:30"Pessoal) {
-          await update(ref(db, `casais/${cid}/config/horario || "20:30"sNotificacao`), { [authUser.uid]: perfil.horario || "20:30"Pessoal });
+        if (perfil?.genero === 'mulher' && perfil?.horarioPessoal) {
+          await update(ref(db, `casais/${cid}/config/horariosNotificacao`), { [authUser.uid]: perfil.horarioPessoal });
         }
         setCasalId(cid); setTela('app'); setModalConectar(false);
       } else { Alert.alert('Erro', 'Chave não encontrada.'); }
@@ -1210,15 +1210,15 @@ export default function App() {
       // alpha 0.0.19: se mudou para homem/nao_informado, remove horário do casal
       // para o countdown e notificações não ficarem presos no horário de quando era mulher
       if (genero !== 'mulher' && casalId) {
-        await remove(ref(db, `casais/${casalId}/config/horario || "20:30"sNotificacao/${authUser.uid}`));
+        await remove(ref(db, `casais/${casalId}/config/horariosNotificacao/${authUser.uid}`));
         setCasalConfig(c => {
-          const h = { ...(c.horario || "20:30"sNotificacao || {}) };
+          const h = { ...(c.horariosNotificacao || {}) };
           delete h[authUser.uid];
-          return { ...c, horario || "20:30"sNotificacao: h };
+          return { ...c, horariosNotificacao: h };
         });
-        // Também limpa o horario || "20:30"Pessoal do perfil local
-        await update(ref(db, `usuarios/${authUser.uid}`), { horario || "20:30"Pessoal: null });
-        setPerfil(p => ({ ...p, horario || "20:30"Pessoal: null }));
+        // Também limpa o horarioPessoal do perfil local
+        await update(ref(db, `usuarios/${authUser.uid}`), { horarioPessoal: null });
+        setPerfil(p => ({ ...p, horarioPessoal: null }));
         if (casalId) await configurarAlarmes(casalId);
       }
       setModalGenero(false);
@@ -1227,28 +1227,28 @@ export default function App() {
 
   // ── alpha 0.0.15: salvarHorarioPessoal ───────────────────────────────────────
   // Só mulher chega até aqui (botão bloqueado pra homem).
-  // 1. Salva em /usuarios/{uid}/horario || "20:30"Pessoal
-  // 2. Se pareada, copia para /casais/{cid}/config/horario || "20:30"sNotificacao/{uid}
+  // 1. Salva em /usuarios/{uid}/horarioPessoal
+  // 2. Se pareada, copia para /casais/{cid}/config/horariosNotificacao/{uid}
   //    → parceiro(s) recebem notificação no mesmo horário automaticamente
   // ─────────────────────────────────────────────────────────────────────────────
   async function salvarHorarioPessoal() {
-    const horario || "20:30" = horario || "20:30"Input.trim();
-    if (!/^\d{2}:\d{2}$/.test(horario || "20:30")) { Alert.alert('Formato inválido', 'Use HH:MM — ex: 21:00'); return; }
+    const horario = horarioInput.trim();
+    if (!/^\d{2}:\d{2}$/.test(horario)) { Alert.alert('Formato inválido', 'Use HH:MM — ex: 21:00'); return; }
     try {
       // 1. Salva no perfil do usuário
-      await update(ref(db, `usuarios/${authUser.uid}`), { horario || "20:30"Pessoal: horario || "20:30" });
-      setPerfil(p => ({ ...p, horario || "20:30"Pessoal: horario || "20:30" }));
+      await update(ref(db, `usuarios/${authUser.uid}`), { horarioPessoal: horario });
+      setPerfil(p => ({ ...p, horarioPessoal: horario }));
       // 2. Se pareada, atualiza o nó do casal para todos receberem
       if (casalId) {
-        await update(ref(db, `casais/${casalId}/config/horario || "20:30"sNotificacao`), { [authUser.uid]: horario || "20:30" });
+        await update(ref(db, `casais/${casalId}/config/horariosNotificacao`), { [authUser.uid]: horario });
         setCasalConfig(c => ({
           ...c,
-          horario || "20:30"sNotificacao: { ...(c.horario || "20:30"sNotificacao || {}), [authUser.uid]: horario || "20:30" }
+          horariosNotificacao: { ...(c.horariosNotificacao || {}), [authUser.uid]: horario }
         }));
         await configurarAlarmes(casalId);
       }
       setModalHorario(false);
-      Alert.alert('✅ Salvo', `Lembrete: ${horario || "20:30"}\nSeu parceiro(a) também será notificado(a)!`);
+      Alert.alert('✅ Salvo', `Lembrete: ${horario}\nSeu parceiro(a) também será notificado(a)!`);
     } catch(e) { Alert.alert('Erro', 'Falha ao salvar horário.'); }
   }
 
@@ -1420,18 +1420,18 @@ export default function App() {
       const agora = new Date();
       const hora = agora.toTimeString().slice(0, 5);
       // alpha 0.0.19: usa horário dinâmico do casal (definido pela mulher)
-      const horario || "20:30"sDoCalsal = casalConfig?.horario || "20:30"sNotificacao || {};
-      const horario || "20:30"Dupla = Object.values(horario || "20:30"sDoCalsal)[0] || null;
-      const horario || "20:30"Pessoal = perfil?.horario || "20:30"Pessoal || horario || "20:30"Dupla || null;
+      const horariosDoCalsal = casalConfig?.horariosNotificacao || {};
+      const horarioDupla = Object.values(horariosDoCalsal)[0] || null;
+      const horarioPessoal = perfil?.horarioPessoal || horarioDupla || null;
       // naJanela = dentro da janela de ouro (horário da mulher ± 10 min)
-      const naJanela = horario || "20:30"Pessoal
-        ? estaDentroJanela(horario || "20:30"Pessoal, JANELA_TOLERANCIA_MIN, agora)
+      const naJanela = horarioPessoal
+        ? estaDentroJanela(horarioPessoal, JANELA_TOLERANCIA_MIN, agora)
         : false;
       const noHorarioCerto = naJanela;
       // alpha 0.0.18: pontos indexados por uid — genérico para qualquer dupla
       const np = { ...pontos };
       // quem ganhou o ponto: se na janela, é a mulher da dupla; senão, quem marcou
-      const uidMulher = Object.entries(casalConfig?.horario || "20:30"sNotificacao || {}).map(([k]) => k)[0] || authUser.uid;
+      const uidMulher = Object.entries(casalConfig?.horariosNotificacao || {}).map(([k]) => k)[0] || authUser.uid;
       const uidGanha = naJanela ? uidMulher : authUser.uid;
       np[uidGanha] = (np[uidGanha] || 0) + 1;
       await set(ref(db, `casais/${casalId}/pontos`), np);
@@ -1499,7 +1499,7 @@ export default function App() {
             }
             // Estorna ponto do casal
             const npAtual = { ...pontos };
-            const uidMulher = Object.keys(casalConfig?.horario || "20:30"sNotificacao || {})[0];
+            const uidMulher = Object.keys(casalConfig?.horariosNotificacao || {})[0];
             const uidPonto = entrada.naJanelaOuro ? (uidMulher || uidMarcou) : uidMarcou;
             if (npAtual[uidPonto] > 0) {
               npAtual[uidPonto] = (npAtual[uidPonto] || 1) - 1;
@@ -1734,10 +1734,10 @@ O relatório será salvo no app.`;
   const nomeAtual  = perfil?.nome || 'Usuário';
   const ehMulher   = perfil?.genero === 'mulher';
   // Horário que o usuário vê: mulher vê o próprio, homem vê o da parceira (se houver)
-  const horario || "20:30"sDoCalsal = casalConfig?.horario || "20:30"sNotificacao || {};
-  const horario || "20:30" = ehMulher
-    ? (perfil?.horario || "20:30"Pessoal || null)
-    : (Object.values(horario || "20:30"sDoCalsal)[0] || null); // homem: pega o primeiro horário do casal
+  const horariosDoCalsal = casalConfig?.horariosNotificacao || {};
+  const horario = ehMulher
+    ? (perfil?.horarioPessoal || null)
+    : (Object.values(horariosDoCalsal)[0] || null); // homem: pega o primeiro horário do casal
   const baixando   = otaProgress > 0 && otaProgress < 1;
   const temUpdate  = otaInfo && versaoMaior(otaInfo.versao, VERSAO_ATUAL);
 
@@ -2150,7 +2150,7 @@ O relatório será salvo no app.`;
       <Modal transparent visible={modalHorario} animationType="slide">
         <View style={s.modalWrap}><View style={s.modalCard}>
           <Text style={s.modalTitulo}>⏰ Horário pessoal</Text>
-          <TextInput style={s.input} placeholder="HH:MM — ex: 21:00" placeholderTextColor="#555" value={horario || "20:30"Input} onChangeText={setHorarioInput} keyboardType="numeric" maxLength={5} />
+          <TextInput style={s.input} placeholder="HH:MM — ex: 21:00" placeholderTextColor="#555" value={horarioInput} onChangeText={setHorarioInput} keyboardType="numeric" maxLength={5} />
           <TouchableOpacity style={s.btnPrimary} onPress={salvarHorarioPessoal}><Text style={s.btnPrimaryTxt}>✅ Salvar</Text></TouchableOpacity>
           <TouchableOpacity style={s.btnSecondary} onPress={() => setModalHorario(false)}><Text style={s.btnSecondaryTxt}>Cancelar</Text></TouchableOpacity>
         </View></View>
@@ -2275,7 +2275,7 @@ O relatório será salvo no app.`;
           </View>
 
           {/* alpha 0.0.15: aviso para mulher sem horário definido */}
-          {ehMulher && !horario || "20:30" && (
+          {ehMulher && !horario && (
             <TouchableOpacity
               style={{ backgroundColor: '#ff2d7822', borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: tema.primary, flexDirection: 'row', alignItems: 'center' }}
               onPress={() => { setHorarioInput('20:30'); setModalHorario(true); }}
@@ -2301,7 +2301,7 @@ O relatório será salvo no app.`;
               <Text style={{ fontSize: 48 }}>{tomouHoje ? '✅' : naJanela ? '🟢' : '⏰'}</Text>
               <Text style={s.cardTitulo}>{tomouHoje ? 'Tomou hoje!' : naJanela ? 'HORA DA PÍLULA!' : 'Ainda não tomou'}</Text>
               <Text style={s.cardSub}>Dia {diaCartela}/28</Text>
-              {horario || "20:30" && !tomouHoje && <Text style={[s.cardSub, { marginTop: 6, color: tema.accent }]}>⏰ Seu lembrete: {horario || "20:30"}</Text>}
+              {horario && !tomouHoje && <Text style={[s.cardSub, { marginTop: 6, color: tema.accent }]}>⏰ Seu lembrete: {horario}</Text>}
             </View>
             {!tomouHoje && (
               <Animated.View style={{ transform: [{ scale: pulseBtn }] }}>
@@ -2583,15 +2583,15 @@ O relatório será salvo no app.`;
               style={[s.setorBtn, !ehMulher && { opacity: 0.5 }]}
               onPress={() => {
                 if (!ehMulher) return; // homem não abre modal
-                setHorarioInput(horario || "20:30" || '20:30');
+                setHorarioInput(horario || '20:30');
                 setModalHorario(true);
               }}
             >
               <Text style={s.setorBtnIcon}>⏰</Text>
               <Text style={s.setorBtnLabel}>
                 {ehMulher
-                  ? (horario || "20:30" || 'Definir horário')
-                  : (horario || "20:30" ? horario || "20:30" : '—')
+                  ? (horario || 'Definir horário')
+                  : (horario ? horario : '—')
                 }
               </Text>
             </TouchableOpacity>
