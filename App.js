@@ -875,7 +875,7 @@ export default function App() {
         // Registra token FCM assim que entra no app
         setTimeout(() => registrarFcmToken(), 1500);
       } else {
-        setTela('pair');
+        setTela('app');
       }
     } catch(e) { setTela('auth'); }
   }
@@ -1140,7 +1140,7 @@ export default function App() {
           loginStreak: 0, diasSemErroHorario: 0, antrixSemGastar: 0,
         }
       });
-    } catch(e) { setAuthErro('Erro no cadastro.'); }
+    } catch(e) { setAuthErro('Erro: ' + (e?.message || JSON.stringify(e))); }
     setAuthLoading(false);
   }
 
