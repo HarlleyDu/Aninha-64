@@ -2770,7 +2770,6 @@ const makeStyles = (tema) => StyleSheet.create({
 import { Linking, Alert } from 'react-native';
 
 
-import { Linking, Alert } from 'react-native';
 
 const baixarEInstalarAPK = async (url) => {
   try {
