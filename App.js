@@ -1,3 +1,331 @@
+// ============================================================
+// ANINHA 64 — App.js
+// Versão: alpha 0.0.7
+// ============================================================
+//
+// ════════════════════════════════════════════════════════════
+// 💊 ANINHA 64 — DOSSIÊ DEFINITIVO v2.0
+// Documento para passar a qualquer IA continuar o desenvolvimento.
+// ════════════════════════════════════════════════════════════
+//
+// 🎯 O QUE É ESSE APP
+//   App Android privado de casal. Ana toma o contraceptivo Yazflex
+//   todo dia e o app:
+//   - Rastreia se ela tomou no horário certo (20:30–20:40 = Janela de Ouro)
+//   - Sincroniza em tempo real entre dois celulares via Firebase
+//   - Gamifica com pontos, Antrix (moeda), streak, loja, conquistas
+//   - Envia notificações diárias no horário
+//
+//   Criador: Harlley (Harlleyduarte@gmail.com) — é o admin
+//   Parceira: Ana
+//   Distribuição: APK via MediaFire/GitHub (não está na Play Store)
+//   Package: com.harlley.aninha64
+//
+// ════════════════════════════════════════════════════════════
+// 🏗️ STACK TÉCNICA (NUNCA MUDAR)
+// ════════════════════════════════════════════════════════════
+//   Framework:    React Native via Expo SDK 48
+//   Motor JS:     Hermes
+//   Build:        EAS CLI no Termux (Android)
+//   Backend:      Firebase Realtime Database
+//   Auth:         Firebase Authentication (email + senha)
+//   Storage:      Firebase Storage (fotos de perfil)
+//   Notificações: expo-notifications
+//   Persistência: getReactNativePersistence(ReactNativeAsyncStorage)
+//
+// ════════════════════════════════════════════════════════════
+// 🔑 CREDENCIAIS E CONTAS
+// ════════════════════════════════════════════════════════════
+//   Expo username:    @aninha64 (duarteharlley@gmail.com)
+//   GitHub repo:      https://github.com/HarlleyDu/Aninha-64
+//   Firebase projeto: pilula-ana
+//   Package Android:  com.harlley.aninha64
+//   EAS Project ID:   5433fd20-8302-4bb6-9834-e6e6255d0d2b
+//   Admin email:      Harlleyduarte@gmail.com
+//
+//   Firebase Config:
+//   apiKey:            AIzaSyChpMCwE1A8Yl3Cm4Oyhc0bJoXBJLSbPuo
+//   authDomain:        pilula-ana.firebaseapp.com
+//   databaseURL:       https://pilula-ana-default-rtdb.firebaseio.com
+//   projectId:         pilula-ana
+//   storageBucket:     pilula-ana.firebasestorage.app
+//   messagingSenderId: 1005101278287
+//   appId:             1:1005101278287:android:e749bbfad114aacbfd763a
+//
+// ════════════════════════════════════════════════════════════
+// 📊 ESQUEMA DO BANCO DE DADOS (não alterar)
+// ════════════════════════════════════════════════════════════
+//   /usuarios/{uid}
+//     nome, email, isAdmin, casalId, genero, criadoEm
+//     antrix, indPontos, streak
+//     itensComprados: { temas:[], selos:[], molduras:[] }
+//     seloEquipado, molduraEquipada
+//     titulosDesbloqueados, tituloEquipado
+//     conquistas, estatisticas
+//
+//   /casais/{casalId}
+//     historico/{"YYYY-MM-DD": {data, hora, tomou, quemMarcou}}
+//     pausa/{inicio, fim, ativa}
+//     pontos/{ana, harlley}
+//     fotos/{uid: "URL Storage"}
+//     tema: string (id do tema)
+//     membros/{uid: nome}
+//     sugestoes/ (lista push)
+//     dataInicio: "YYYY-MM-DD"
+//     config/horarioPessoal/{uid}: "HH:MM"
+//     mural/ (mensagens 24h)
+//
+//   /pairCodes/{chave6chars} → {casalId}  ← deletado após uso
+//   /config → {versao, apkUrl, changelog, forcarAtualizar}  ← OTA
+//
+// ════════════════════════════════════════════════════════════
+// 🎮 REGRAS DE NEGÓCIO (NUNCA REMOVER)
+// ════════════════════════════════════════════════════════════
+//   Janela de Ouro: 20:30 — 20:40
+//   - Tomou dentro → ponto para Ana
+//   - Tomou fora   → ponto para quem marcou
+//   - Streak só conta dentro da janela
+//
+//   Recompensas por streak:
+//   streak 0-1 → +10 pts, +5 Antrix
+//   streak 2   → +15 pts, +7 Antrix
+//   streak 3   → +20 pts, +10 Antrix
+//   streak 4   → +30 pts, +15 Antrix
+//   streak 5+  → +50 pts, +25 Antrix
+//
+//   Ciclos de 28 dias: diaCartela = totalDias % 28
+//   A cada 28 → confete animado
+//
+//   Pausa do Yazflex: dura 4 dias, admin inicia/encerra
+//
+//   Pareamento: chave 6 chars, deletada após uso
+//
+// ════════════════════════════════════════════════════════════
+// 📱 ABAS DO APP (8 abas)
+// ════════════════════════════════════════════════════════════
+//   🏠 home       → countdown, ConsistencyCircle, card status, botão marcar
+//   📅 calendario → histórico mensal navegável (admin pode editar)
+//   🏆 ranking    → pontos Ana vs Harlley + ranking global
+//   🛒 loja       → comprar temas/selos/molduras com Antrix
+//   🏅 conquistas → lista de conquistas e títulos
+//   💌 mural      → mensagens do casal (expiram em 24h)
+//   💡 sugestoes  → caixa de texto para sugestões
+//   👤 perfil     → foto, stats, customização, configurações
+//
+// ════════════════════════════════════════════════════════════
+// 🎨 LAYOUT (sem área vazia entre header e conteúdo)
+// ════════════════════════════════════════════════════════════
+//   Header compacto: paddingTop:14 (sem paddingTop:48)
+//   Tab bar fixa embaixo estilo Instagram
+//   O que NÃO pode existir: área vazia entre header e conteúdo
+//
+// ════════════════════════════════════════════════════════════
+// ☠️ LIVRO NEGRO — Erros conhecidos (nunca repetir)
+// ════════════════════════════════════════════════════════════
+//   ❌ expo-image-picker → PROIBIDO — usa URL externa para fotos
+//   ❌ uploadString com base64 → usar fetch(uri)→blob→uploadBytes
+//   ❌ setPersistence web API no RN → usar getReactNativePersistence
+//   ❌ ConsistencyCircle com RADIUS=(SW-80)/2 → tela inteira
+//   ❌ Estado inicial 'auth' → usar 'splash'
+//   ❌ PanResponder sem ref → usar abaAtivaRef para swipe correto
+//   ❌ Build sem EAS_SKIP_AUTO_FINGERPRINT=1 → fingerprint bug
+//   ❌ useState(true') — aspas corrompidas → sed fix antes de build
+//   ❌ makeStyles duplicado → grep -c "makeStyles" deve retornar 2
+//   ❌ Import duplicado StatusBar → manter só um
+//
+// ════════════════════════════════════════════════════════════
+// 🔧 COMANDOS
+// ════════════════════════════════════════════════════════════
+//   Deploy/teste via Expo Go (USE ISSO, não EAS para testes):
+//   cp /sdcard/Download/App_alpha_X_X_X.js ~/aninha64/App.js
+//   cd ~/aninha64 && npx expo start --lan
+//
+//   Build APK (só quando pronto para lançar):
+//   EAS_SKIP_AUTO_FINGERPRINT=1 eas build --platform android --profile preview --non-interactive
+//
+//   Checklist pré-build:
+//   grep "VERSAO_ATUAL" App.js
+//   grep -c "makeStyles" App.js          # deve retornar 2
+//   grep -n "function escolherFoto" App.js
+//   node --check App.js
+//
+// ════════════════════════════════════════════════════════════
+// 🔔 NOTIFICAÇÕES (3 agendamentos recorrentes)
+// ════════════════════════════════════════════════════════════
+//   Lembrete pessoal → horário definido pelo usuário
+//   Janela de Ouro   → 20:30
+//   Alerta tensão    → 20:35
+//
+// ════════════════════════════════════════════════════════════
+// 🛒 LOJA
+// ════════════════════════════════════════════════════════════
+//   Temas:   comum 20💠 | raro 80💠 | bonito 200💠 | lendário 500💠
+//   Selos:   comum 15💠 | raro 60💠 | lendário 300💠
+//   Molduras:comum 20💠 | raro 80💠 | lendário 300💠
+//   Admin: Antrix infinito (999999), desbloquear tudo
+//
+// ════════════════════════════════════════════════════════════
+// 🏆 CONQUISTAS
+// ════════════════════════════════════════════════════════════
+//   Verificadas em verificarTodasConquistas() após cada marcação.
+//   Concedem títulos com cor customizada exibidos no header.
+//
+// ════════════════════════════════════════════════════════════
+// 🔄 CHANGELOG
+// ════════════════════════════════════════════════════════════
+//   alpha 0.0.1 — countdown em segundos, botão verde na janela,
+//                 admin desbloquear conquistas, barra de abas menor
+//   alpha 0.0.2 — ConsistencyCircle compacto (80px), não ocupa tela
+//   alpha 0.0.3 — documentação completa no código
+//   alpha 0.0.4 — (incremento)
+//   alpha 0.0.5 — (incremento)
+//   alpha 0.0.6 — versão estável com todas as 8 abas funcionando
+//   alpha 0.0.7 — dossiê v2.0 embutido no código, versão atualizada
+//
+// ════════════════════════════════════════════════════════════
+// 💡 PRÓXIMAS MELHORIAS SUGERIDAS
+// ════════════════════════════════════════════════════════════
+//   - Foto maior no header (já pedido pelo Harlley)
+//   - Animação ao marcar a pílula
+//   - Notificação para o parceiro quando Ana marcar
+//   - Gráfico de adesão mensal na aba Ranking
+//   - Widget para tela inicial do Android
+//   - Som customizado ao marcar
+//   - Modo escuro/claro por horário do dia
+//
+// ════════════════════════════════════════════════════════════
+//
+// REGRA ABSOLUTA DE VERSIONAMENTO:
+//   Qualquer mudança = nova versão.
+//   Formato: alpha X.X.X
+//   Atualizar em 3 lugares obrigatórios:
+//     1. VERSAO_ATUAL neste arquivo (linha ~50)
+//     2. Nome do arquivo: App_alpha_X_X_X.js
+//     3. Visível no app: splash + parte inferior do perfil
+//
+// COMANDO PARA DEPLOY (copiar, commitar e abrir Expo Go):
+//   cp /sdcard/Download/App_alpha_X_X_X.js ~/aninha64/App.js && cd ~/aninha64 && git add App.js && git commit -m "alpha X.X.X" && git push origin main && npx expo start --lan
+//
+// ============================================================
+// IDENTIDADE DO PROJETO
+// ============================================================
+//   Nome:        Aninha 64 (também chamado Pílula da Ana)
+//   Tipo:        App privado de casal — NÃO publicado na Play Store
+//   Objetivo:    Garantir que Ana tome o Yazflex (anticoncepcional)
+//                no horário correto todos os dias
+//   Criador:     Harlley (harlleyduarte@gmail.com)
+//   Parceira:    Ana
+//
+// ============================================================
+// STACK TÉCNICA
+// ============================================================
+//   Framework:   React Native via Expo SDK 48
+//   Motor JS:    Hermes
+//   Build:       EAS CLI no Termux (Android)
+//   Backend:     Firebase Realtime Database
+//   Auth:        Firebase Authentication (email + senha)
+//   Storage:     Firebase Storage (fotos de perfil)
+//   Notificações:expo-notifications
+//
+//   PROIBIDO mudar: SDK, backend, motor JS
+//
+// ============================================================
+// CONTAS E CREDENCIAIS
+// ============================================================
+//   Expo username:   @aninha64 (duarteharlley@gmail.com)
+//   GitHub repo:     https://github.com/HarlleyDu/Aninha-64
+//   Firebase projeto:pilula-ana
+//   Package Android: com.harlley.aninha64
+//   EAS Project ID:  5433fd20-8302-4bb6-9834-e6e6255d0d2b
+//   Admin email:     Harlleyduarte@gmail.com
+//
+// ============================================================
+// FIREBASE — ESTRUTURA DO BANCO (não alterar)
+// ============================================================
+//   /usuarios/{uid}
+//     nome, email, isAdmin, casalId, genero, criadoEm
+//     antrix, indPontos, streak
+//     itensComprados: { temas:[], selos:[], molduras:[] }
+//     seloEquipado, molduraEquipada
+//     titulosDesbloqueados, tituloEquipado
+//     conquistas, estatisticas
+//
+//   /casais/{casalId}
+//     historico/{"YYYY-MM-DD": {data, hora, tomou, quemMarcou}}
+//     pausa/{inicio, fim, ativa}
+//     pontos/{ana, harlley}
+//     fotos/{uid: "URL Storage"}
+//     tema: string (id do tema)
+//     membros/{uid: nome}
+//     sugestoes/ (lista push)
+//     dataInicio: "YYYY-MM-DD"
+//     config/horarioPessoal/{uid}: "HH:MM"
+//     mural/ (mensagens 24h)
+//
+//   /pairCodes/{chave6chars} → {casalId} (deletado após uso)
+//   /config → {versao, apkUrl, changelog, forcarAtualizar} (OTA)
+//
+// ============================================================
+// MECÂNICA SAGRADA — JANELA DE OURO (NUNCA REMOVER)
+// ============================================================
+//   Horário: 20:30 — 20:40
+//   - Tomou dentro da janela → ponto para Ana
+//   - Tomou fora da janela   → ponto para quem marcou
+//   - Ciclo de 28 dias       → confete + nova cartela
+//   - Pausa de 4 dias disponível (admin)
+//
+// ============================================================
+// SISTEMA DE RECOMPENSAS
+// ============================================================
+//   Antrix: moeda interna do app
+//   - Ganhos ao marcar a pílula (mais streak = mais Antrix)
+//   - Usados na Loja para comprar temas, selos e molduras
+//   indPontos: pontuação individual do usuário
+//   streak: dias consecutivos marcando na Janela de Ouro
+//
+// ============================================================
+// ABAS DO APP (8 abas, navegação por swipe ou toque)
+// ============================================================
+//   🏠 home       → status do dia, countdown, botão marcar
+//   📅 calendario → histórico mensal navegável
+//   🏆 ranking    → pontos da dupla
+//   🛒 loja       → comprar temas, selos, molduras com Antrix
+//   🏅 conquistas → lista de conquistas e títulos
+//   💌 mural      → mensagens do casal (24h)
+//   💡 sugestoes  → caixa de sugestões para o Harlley
+//   👤 perfil     → foto, stats, customização, configurações
+//
+// ============================================================
+// ADMIN (vinculado ao email Harlleyduarte@gmail.com)
+// ============================================================
+//   - Definir data de início da cartela
+//   - Iniciar/encerrar pausa de 4 dias
+//   - Remover registro do dia
+//   - Antrix infinito (teste)
+//   - Desbloquear todos itens da loja
+//   - Desbloquear todas conquistas
+//   - Reset Antrix/Loja/Conquistas
+//
+// ============================================================
+// LIVRO NEGRO — Erros conhecidos (nunca repetir)
+// ============================================================
+//   ❌ uploadString com base64 → usar fetch(uri)→blob→uploadBytes
+//   ❌ setPersistence web API no RN → usar getReactNativePersistence
+//   ❌ ConsistencyCircle com RADIUS=(SW-80)/2 → tela inteira
+//   ❌ Estado inicial 'auth' → usar 'splash', deixar onAuthStateChanged decidir
+//   ❌ PanResponder sem ref → usar abaAtivaRef para swipe correto
+//   ❌ Build sem EAS_SKIP_AUTO_FINGERPRINT=1 → fingerprint bug
+//
+// ============================================================
+// CHANGELOG
+// ============================================================
+//   alpha 0.0.1 — countdown em segundos, botão verde na janela,
+//                 admin desbloquear conquistas, barra de abas menor
+//   alpha 0.0.2 — ConsistencyCircle compacto (80px), não ocupa tela
+//   alpha 0.0.3 — documentação completa no código
+//
+// ============================================================
+
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView,
   Alert, TextInput, Modal, Animated, Image,
@@ -39,7 +367,7 @@ try {
   console.error("Firebase Init Error:", e);
 }
 
-const VERSAO_ATUAL  = "alpha 0.0.2";
+const VERSAO_ATUAL  = "alpha 0.0.7";
 const ADMIN_EMAIL   = "Harlleyduarte@gmail.com";
 const JANELA_INICIO = { h: 20, m: 30 };
 const JANELA_FIM    = { h: 20, m: 40 };
@@ -1368,25 +1696,6 @@ export default function App() {
         </View>
       </View>
 
-      {/* Abas — minimalistas, só emoji pequeno */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ backgroundColor: tema.card, borderBottomWidth: 1, borderBottomColor: tema.border }}>
-        <View style={{ flexDirection: 'row' }}>
-          {ABAS.map((aba) => {
-            const icones = { home:'🏠', calendario:'📅', ranking:'🏆', loja:'🛒', conquistas:'🏅', mural:'💌', sugestoes:'💡', perfil:'👤' };
-            const ativo = abaAtiva === aba;
-            return (
-              <TouchableOpacity
-                key={aba}
-                style={{ paddingHorizontal: 9, paddingVertical: 5, alignItems: 'center', borderBottomWidth: ativo ? 2 : 0, borderBottomColor: tema.primary }}
-                onPress={() => { abaAtivaRef.current = aba; setAbaAtiva(aba); }}
-              >
-                <Text style={{ fontSize: 13, opacity: ativo ? 1 : 0.4 }}>{icones[aba]}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </ScrollView>
-
       <ScrollView style={s.body} contentContainerStyle={s.bodyContent} {...panResponder.panHandlers}>
 
         {/* HOME */}
@@ -1682,97 +1991,115 @@ export default function App() {
         </>}
 
       </ScrollView>
+
+      {/* ── TAB BAR FIXA EMBAIXO ── */}
+      <View style={s.tabBar}>
+        {ABAS.map((aba) => {
+          const icones = { home:'🏠', calendario:'📅', ranking:'🏆', loja:'🛒', conquistas:'🏅', mural:'💌', sugestoes:'💡', perfil:'👤' };
+          const labels = { home:'Home', calendario:'Cal.', ranking:'Rank', loja:'Loja', conquistas:'Troféus', mural:'Mural', sugestoes:'Ideias', perfil:'Perfil' };
+          const ativo = abaAtiva === aba;
+          return (
+            <TouchableOpacity key={aba} style={s.tabItem} onPress={() => { abaAtivaRef.current = aba; setAbaAtiva(aba); }}>
+              {ativo && <View style={s.tabIndicator} />}
+              <Text style={{ fontSize: 19, opacity: ativo ? 1 : 0.3 }}>{icones[aba]}</Text>
+              <Text style={{ fontSize: 9, marginTop: 1, color: ativo ? tema.primary : tema.sub, fontWeight: ativo ? '700' : '400' }}>{labels[aba]}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
     </View>
   );
 }
 
 const makeStyles = (tema) => StyleSheet.create({
-  root:           { flex: 1, backgroundColor: tema.bg },
-  splash:         { flex: 1, backgroundColor: '#0a0010', alignItems: 'center', justifyContent: 'center' },
-  splashEmoji:    { fontSize: 64, marginBottom: 16 },
-  splashTitle:    { fontSize: 28, fontWeight: '800', color: '#fff' },
-  authWrap:       { flexGrow: 1, backgroundColor: '#0a0010', padding: 28, justifyContent: 'center' },
-  authSub:        { fontSize: 14, color: '#555', textAlign: 'center', marginBottom: 28 },
-  authSwitch:     { color: '#7b2fff', textAlign: 'center', marginTop: 16 },
-  input:          { backgroundColor: tema.card, borderRadius: 12, padding: 16, color: tema.text, marginBottom: 12, borderWidth: 1, borderColor: tema.border },
-  inputChave:     { textAlign: 'center', fontSize: 24, fontWeight: '800', letterSpacing: 6 },
-  btnPrimary:     { backgroundColor: tema.primary, borderRadius: 16, padding: 18, alignItems: 'center', marginBottom: 12 },
-  btnPrimaryTxt:  { color: '#fff', fontWeight: '800' },
-  btnSecondary:   { padding: 12, alignItems: 'center', marginTop: 8 },
-  btnSecondaryTxt:{ color: tema.sub },
-  header:         { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, paddingTop: 48, backgroundColor: tema.card },
-  headerLeft:     { flexDirection: 'row', alignItems: 'center' },
-  headerTitle:    { color: '#fff', fontWeight: '800', fontSize: 16 },
-  headerSub:      { color: tema.sub, fontSize: 11 },
-  avatarHeader:   { width: 40, height: 40, borderRadius: 20 },
-  avatarVazio:    { width: 40, height: 40, borderRadius: 20, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' },
-  iconBtn:        { width: 36, height: 36, borderRadius: 18, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' },
-  aba:            { paddingHorizontal: 10, paddingVertical: 6, alignItems: 'center' },
-  abaTxt:         { fontSize: 14, opacity: 0.4 },
-  body:           { flex: 1 },
-  bodyContent:    { padding: 20, paddingBottom: 40 },
-  card:           { backgroundColor: tema.card, borderRadius: 24, padding: 30, alignItems: 'center', borderWidth: 2, marginBottom: 20 },
-  cardTitulo:     { fontSize: 22, fontWeight: '900', color: '#fff', marginTop: 10 },
-  cardSub:        { color: tema.sub, marginTop: 5 },
-  secLabel:       { color: '#fff', fontSize: 18, fontWeight: '800', marginBottom: 16 },
-  calHeader:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  calTitulo:      { color: '#fff', fontSize: 18, fontWeight: '800' },
-  calNav:         { color: tema.primary, fontSize: 30, paddingHorizontal: 20 },
-  calGrid:        { flexDirection: 'row', flexWrap: 'wrap' },
-  calDiaSemana:   { width: (SW - 40) / 7, alignItems: 'center', marginBottom: 10 },
-  calDiaSemanaT:  { color: tema.sub, fontSize: 12 },
-  calCel:         { width: (SW - 40) / 7, height: 45, alignItems: 'center', justifyContent: 'center', borderRadius: 8, borderWidth: 1, borderColor: 'transparent' },
-  calCelVazia:    { width: (SW - 40) / 7, height: 45 },
-  calDiaNum:      { color: '#fff', fontSize: 14 },
-  rankCard:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: tema.card, padding: 20, borderRadius: 16, marginBottom: 10 },
-  rankNome:       { color: '#fff', fontWeight: '700' },
-  rankPts:        { color: tema.primary, fontWeight: '800', fontSize: 20 },
-  perfilCard:     { alignItems: 'center', padding: 24, backgroundColor: tema.card, borderRadius: 24, marginBottom: 8 },
-  fotoPerfil:     { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: tema.primary },
-  fotoPerfilVazio:{ width: 100, height: 100, borderRadius: 50, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' },
-  perfilNome:     { color: '#fff', fontSize: 22, fontWeight: '800', marginTop: 15 },
-  modalWrap:      { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', padding: 20 },
-  modalCard:      { backgroundColor: tema.card, borderRadius: 24, padding: 24, borderWidth: 1, borderColor: tema.border },
-  modalTitulo:    { color: '#fff', fontSize: 20, fontWeight: '800', marginBottom: 20 },
-  modalAmor:      { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', alignItems: 'center', justifyContent: 'center' },
-  modalAmorTxt:   { color: '#fff', fontSize: 24, fontWeight: '900', marginTop: 20 },
-  temaBtn:        { flexDirection: 'row', alignItems: 'center', padding: 15, borderRadius: 12, borderWidth: 1, borderColor: tema.border, marginBottom: 10 },
-  temaCor:        { width: 20, height: 20, borderRadius: 10, marginRight: 15 },
-  temaTxt:        { color: '#fff', fontWeight: '600', flex: 1 },
-  adminBtn:       { padding: 15, borderRadius: 12, borderWidth: 1, borderColor: tema.primary, marginBottom: 10 },
-  adminBtnTxt:    { color: tema.primary, textAlign: 'center', fontWeight: '700' },
-  chaveBox:       { backgroundColor: tema.card, borderRadius: 20, padding: 24, alignItems: 'center', marginVertical: 12, borderWidth: 2, borderColor: tema.primary },
-  chaveLabel:     { color: tema.sub, fontSize: 14, marginBottom: 8 },
-  chaveValor:     { color: tema.primary, fontSize: 32, fontWeight: '900', letterSpacing: 8 },
-  erroTxt:        { color: '#ff4444', textAlign: 'center', marginBottom: 10 },
-  progressWrap:   { width: '100%', height: 8, backgroundColor: tema.border, borderRadius: 4, marginBottom: 16, overflow: 'hidden' },
-  progressBar:    { height: '100%', backgroundColor: tema.primary, borderRadius: 4 },
-  statsRow:       { flexDirection: 'row', justifyContent: 'space-around', width: '100%', marginVertical: 15 },
-  statItem:       { alignItems: 'center' },
-  statValue:      { fontSize: 20, fontWeight: 'bold', color: tema.primary },
-  statLabel:      { fontSize: 11, color: tema.sub, marginTop: 4 },
-  conquistaItem:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: tema.border },
-  conquistaNome:  { color: tema.sub, fontSize: 12, flex: 1 },
+  root:            { flex: 1, backgroundColor: tema.bg },
+  splash:          { flex: 1, backgroundColor: '#0a0010', alignItems: 'center', justifyContent: 'center' },
+  splashEmoji:     { fontSize: 64, marginBottom: 16 },
+  splashTitle:     { fontSize: 28, fontWeight: '800', color: '#fff' },
+  authWrap:        { flexGrow: 1, backgroundColor: '#0a0010', padding: 28, justifyContent: 'center' },
+  authSub:         { fontSize: 14, color: '#555', textAlign: 'center', marginBottom: 28 },
+  authSwitch:      { color: '#7b2fff', textAlign: 'center', marginTop: 16 },
+  input:           { backgroundColor: tema.card, borderRadius: 12, padding: 16, color: tema.text, marginBottom: 12, borderWidth: 1, borderColor: tema.border },
+  inputChave:      { textAlign: 'center', fontSize: 24, fontWeight: '800', letterSpacing: 6 },
+  btnPrimary:      { backgroundColor: tema.primary, borderRadius: 16, padding: 18, alignItems: 'center', marginBottom: 12 },
+  btnPrimaryTxt:   { color: '#fff', fontWeight: '800' },
+  btnSecondary:    { padding: 12, alignItems: 'center', marginTop: 8 },
+  btnSecondaryTxt: { color: tema.sub },
+  header:          { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingTop: 14, paddingBottom: 10, backgroundColor: tema.card },
+  headerLeft:      { flexDirection: 'row', alignItems: 'center' },
+  headerTitle:     { color: '#fff', fontWeight: '800', fontSize: 15 },
+  headerSub:       { color: tema.sub, fontSize: 10 },
+  avatarHeader:    { width: 46, height: 46, borderRadius: 23 },
+  avatarVazio:     { width: 46, height: 46, borderRadius: 23, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' },
+  iconBtn:         { width: 34, height: 34, borderRadius: 17, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' },
+  tabBar:          { flexDirection: 'row', backgroundColor: tema.card, borderTopWidth: 1, borderTopColor: tema.border, paddingBottom: 8, paddingTop: 6 },
+  tabItem:         { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 2, position: 'relative' },
+  tabIndicator:    { position: 'absolute', top: 0, width: 24, height: 2, backgroundColor: tema.primary, borderRadius: 1 },
+  body:            { flex: 1 },
+  bodyContent:     { padding: 14, paddingBottom: 20 },
+  card:            { backgroundColor: tema.card, borderRadius: 24, padding: 28, alignItems: 'center', borderWidth: 2, marginBottom: 14 },
+  cardTitulo:      { fontSize: 22, fontWeight: '900', color: '#fff', marginTop: 10 },
+  cardSub:         { color: tema.sub, marginTop: 5 },
+  secLabel:        { color: '#fff', fontSize: 18, fontWeight: '800', marginBottom: 16 },
+  calHeader:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  calTitulo:       { color: '#fff', fontSize: 18, fontWeight: '800' },
+  calNav:          { color: tema.primary, fontSize: 30, paddingHorizontal: 20 },
+  calGrid:         { flexDirection: 'row', flexWrap: 'wrap' },
+  calDiaSemana:    { width: (SW - 28) / 7, alignItems: 'center', marginBottom: 10 },
+  calDiaSemanaT:   { color: tema.sub, fontSize: 12 },
+  calCel:          { width: (SW - 28) / 7, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 8, borderWidth: 1, borderColor: 'transparent' },
+  calCelVazia:     { width: (SW - 28) / 7, height: 42 },
+  calDiaNum:       { color: '#fff', fontSize: 14 },
+  rankCard:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: tema.card, padding: 20, borderRadius: 16, marginBottom: 10 },
+  rankNome:        { color: '#fff', fontWeight: '700' },
+  rankPts:         { color: tema.primary, fontWeight: '800', fontSize: 20 },
+  perfilCard:      { alignItems: 'center', padding: 24, backgroundColor: tema.card, borderRadius: 24, marginBottom: 8 },
+  fotoPerfil:      { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: tema.primary },
+  fotoPerfilVazio: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#333', alignItems: 'center', justifyContent: 'center' },
+  perfilNome:      { color: '#fff', fontSize: 22, fontWeight: '800', marginTop: 15 },
+  modalWrap:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', padding: 20 },
+  modalCard:       { backgroundColor: tema.card, borderRadius: 24, padding: 24, borderWidth: 1, borderColor: tema.border },
+  modalTitulo:     { color: '#fff', fontSize: 20, fontWeight: '800', marginBottom: 20 },
+  modalAmor:       { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', alignItems: 'center', justifyContent: 'center' },
+  modalAmorTxt:    { color: '#fff', fontSize: 24, fontWeight: '900', marginTop: 20 },
+  temaBtn:         { flexDirection: 'row', alignItems: 'center', padding: 15, borderRadius: 12, borderWidth: 1, borderColor: tema.border, marginBottom: 10 },
+  temaCor:         { width: 20, height: 20, borderRadius: 10, marginRight: 15 },
+  temaTxt:         { color: '#fff', fontWeight: '600', flex: 1 },
+  adminBtn:        { padding: 15, borderRadius: 12, borderWidth: 1, borderColor: tema.primary, marginBottom: 10 },
+  adminBtnTxt:     { color: tema.primary, textAlign: 'center', fontWeight: '700' },
+  chaveBox:        { backgroundColor: tema.card, borderRadius: 20, padding: 24, alignItems: 'center', marginVertical: 12, borderWidth: 2, borderColor: tema.primary },
+  chaveLabel:      { color: tema.sub, fontSize: 14, marginBottom: 8 },
+  chaveValor:      { color: tema.primary, fontSize: 32, fontWeight: '900', letterSpacing: 8 },
+  erroTxt:         { color: '#ff4444', textAlign: 'center', marginBottom: 10 },
+  progressWrap:    { width: '100%', height: 8, backgroundColor: tema.border, borderRadius: 4, marginBottom: 16, overflow: 'hidden' },
+  progressBar:     { height: '100%', backgroundColor: tema.primary, borderRadius: 4 },
+  statsRow:        { flexDirection: 'row', justifyContent: 'space-around', width: '100%', marginVertical: 15 },
+  statItem:        { alignItems: 'center' },
+  statValue:       { fontSize: 20, fontWeight: 'bold', color: tema.primary },
+  statLabel:       { fontSize: 11, color: tema.sub, marginTop: 4 },
+  conquistaItem:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: tema.border },
+  conquistaNome:   { color: tema.sub, fontSize: 12, flex: 1 },
   conquistaDesbloq:{ color: '#fff', fontWeight: 'bold' },
   conquistaCheck:  { color: '#00ff87', fontSize: 16, marginLeft: 8 },
-  rankGlobalItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: tema.border },
-  rankPos:        { width: 36, fontSize: 14, fontWeight: 'bold', color: tema.primary },
-  rankName:       { flex: 1, fontSize: 14, color: '#fff' },
-  rankValue:      { fontSize: 14, fontWeight: 'bold', color: tema.primary },
-  statsInfo:      { color: tema.primary, fontSize: 16, fontWeight: 'bold', marginBottom: 10 },
-  catTitulo:      { color: '#fff', fontSize: 14, fontWeight: 'bold', marginTop: 12, marginBottom: 8 },
-  catConquista:   { color: tema.primary, fontSize: 14, fontWeight: 'bold', marginTop: 16, marginBottom: 8 },
-  lojaGrid:       { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  lojaItem:       { width: (SW - 56) / 2, backgroundColor: tema.card, borderRadius: 12, padding: 10, marginBottom: 10, alignItems: 'center', borderWidth: 1, borderColor: tema.border },
-  lojaItemOwned:  { opacity: 0.5 },
-  corTema:        { width: 36, height: 36, borderRadius: 18, marginBottom: 8 },
-  lojaNome:       { color: '#fff', fontSize: 11, textAlign: 'center' },
-  lojaPreco:      { color: tema.primary, fontSize: 10, marginTop: 4 },
-  mensagemItem:   { backgroundColor: tema.card, borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: tema.border },
-  mensagemUsuario:{ color: tema.primary, fontWeight: 'bold', fontSize: 12 },
-  mensagemTexto:  { color: '#fff', fontSize: 14, marginTop: 4 },
-  mensagemData:   { color: tema.sub, fontSize: 10, marginTop: 4, textAlign: 'right' },
-  // 🆕 NOVO alpha 0.0.1
-  countdownBar:   { backgroundColor: tema.card, borderRadius: 12, padding: 10, alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: tema.border },
-  countdownTxt:   { color: tema.sub, fontSize: 13, fontWeight: '700' },
+  rankGlobalItem:  { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: tema.border },
+  rankPos:         { width: 36, fontSize: 14, fontWeight: 'bold', color: tema.primary },
+  rankName:        { flex: 1, fontSize: 14, color: '#fff' },
+  rankValue:       { fontSize: 14, fontWeight: 'bold', color: tema.primary },
+  statsInfo:       { color: tema.primary, fontSize: 16, fontWeight: 'bold', marginBottom: 10 },
+  catTitulo:       { color: '#fff', fontSize: 14, fontWeight: 'bold', marginTop: 12, marginBottom: 8 },
+  catConquista:    { color: tema.primary, fontSize: 14, fontWeight: 'bold', marginTop: 16, marginBottom: 8 },
+  lojaGrid:        { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  lojaItem:        { width: (SW - 42) / 2, backgroundColor: tema.card, borderRadius: 12, padding: 10, marginBottom: 10, alignItems: 'center', borderWidth: 1, borderColor: tema.border },
+  lojaItemOwned:   { opacity: 0.5 },
+  corTema:         { width: 36, height: 36, borderRadius: 18, marginBottom: 8 },
+  lojaNome:        { color: '#fff', fontSize: 11, textAlign: 'center' },
+  lojaPreco:       { color: tema.primary, fontSize: 10, marginTop: 4 },
+  mensagemItem:    { backgroundColor: tema.card, borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: tema.border },
+  mensagemUsuario: { color: tema.primary, fontWeight: 'bold', fontSize: 12 },
+  mensagemTexto:   { color: '#fff', fontSize: 14, marginTop: 4 },
+  mensagemData:    { color: tema.sub, fontSize: 10, marginTop: 4, textAlign: 'right' },
+  countdownBar:    { backgroundColor: tema.card, borderRadius: 10, padding: 7, alignItems: 'center', marginBottom: 10, borderWidth: 1, borderColor: tema.border },
+  countdownTxt:    { color: tema.sub, fontSize: 12, fontWeight: '700' },
 });
+
