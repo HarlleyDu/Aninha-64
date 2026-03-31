@@ -439,7 +439,7 @@ Notifications.setNotificationHandler({
 });
 
 // Círculo de consistência compacto — não ocupa a tela toda
-function ConsistencyCircle({ historico, dataInicio, tema }) {
+function ConsistencyCircle({ historico, dataInicio, tema, horario }) {
   const TOTAL = 30;
   const SIZE  = 88;
   const R     = SIZE / 2;
@@ -2296,7 +2296,7 @@ O relatório será salvo no app.`;
               <Text style={s.cardSub}>{pD} dias restantes</Text>
             </View>
           ) : <>
-            <ConsistencyCircle historico={historico} dataInicio={dataInicio} tema={tema} />
+            <ConsistencyCircle historico={historico} dataInicio={dataInicio} tema={tema} horario={horario} />
             <View style={[s.card, { borderColor: tomouHoje ? '#00ff87' : naJanela ? '#00ff87' : tema.primary }]}>
               <Text style={{ fontSize: 48 }}>{tomouHoje ? '✅' : naJanela ? '🟢' : '⏰'}</Text>
               <Text style={s.cardTitulo}>{tomouHoje ? 'Tomou hoje!' : naJanela ? 'HORA DA PÍLULA!' : 'Ainda não tomou'}</Text>
