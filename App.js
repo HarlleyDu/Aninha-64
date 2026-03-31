@@ -1,6 +1,6 @@
 // ============================================================
 // DuoTrack — App.js
-// Versão: alpha 0.0.20
+// Versão: alpha 0.0.21
 // ============================================================
 //
 // ════════════════════════════════════════════════════════════
@@ -174,7 +174,7 @@ try {
   console.error("Firebase Init Error:", e);
 }
 
-const VERSAO_ATUAL  = "alpha 0.0.20";
+const VERSAO_ATUAL  = "alpha 0.0.21";
 const ADMIN_EMAIL   = "Harlleyduarte@gmail.com";
 const JANELA_TOLERANCIA_MIN = 10; // janela de ouro = horário definido ± 10 min
 const { width: SW } = Dimensions.get('window');
@@ -484,7 +484,16 @@ function ConsistencyCircle({ historico, dataInicio, tema }) {
   const totalTomou = Object.values(historico).filter(e => e?.tomou).length;
 
   const diasPassados = (() => {
-    const diff = Math.floor((new Date(hoje + 'T12:00:00') - new Date(dataInicio + 'T12:00:00')) / 86400000) + 1;
+    // Se hoje ainda não passou do horário da pílula + tolerância, não conta hoje como passado
+    const agora = new Date();
+    const [h, m] = (meuHorario || '20:30').split(':').map(Number);
+    const limiteHoje = new Date();
+    limiteHoje.setHours(h, m + JANELA_TOLERANCIA_MIN, 0, 0);
+    
+    const hojeJaPassouDoHorario = agora > limiteHoje;
+    const dataReferencia = hojeJaPassouDoHorario ? hoje : dateToKey(new Date(agora.getTime() - 86400000));
+
+    const diff = Math.floor((new Date(dataReferencia + 'T12:00:00') - new Date(dataInicio + 'T12:00:00')) / 86400000) + 1;
     return Math.min(Math.max(diff, 0), TOTAL);
   })();
 
@@ -499,10 +508,20 @@ function ConsistencyCircle({ historico, dataInicio, tema }) {
     const y = R + Math.sin(angle) * (R - DOT) - DOT / 2;
     const key = getDayKey(i + 1);
     const tomou = !!historico[key]?.tomou;
+    
+    // Lógica para cor do dot: só fica vermelho se o dia já passou do horário limite
+    const agora = new Date();
+    const [h, m] = (meuHorario || '20:30').split(':').map(Number);
+    const limiteHoje = new Date();
+    limiteHoje.setHours(h, m + JANELA_TOLERANCIA_MIN, 0, 0);
+    
+    const ehHoje = key === hoje;
     const futuro = key > hoje;
+    const jaPassouLimite = ehHoje ? (agora > limiteHoje) : !futuro;
+
     let cor = tema.border;
     if (tomou) cor = tema.primary;
-    else if (!futuro) cor = '#ff4444';
+    else if (jaPassouLimite) cor = '#ff4444';
     return { x, y, cor };
   });
 

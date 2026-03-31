@@ -1,29 +1,33 @@
 {
   "expo": {
-    "name": "aninha64",
+    "name": "Aninha 64",
     "slug": "aninha64",
     "version": "1.0.0",
     "orientation": "portrait",
+    "userInterfaceStyle": "dark",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
-    "ios": {
-      "supportsTablet": true
+      "backgroundColor": "#07030F"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/adaptive-foreground.png",
+        "backgroundColor": "#0A0010"
       },
-      "edgeToEdgeEnabled": true
+      "package": "com.harlley.aninha64",
+      "permissions": ["NOTIFICATIONS", "RECEIVE_BOOT_COMPLETED", "VIBRATE"]
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
+    "plugins": [
+      ["expo-notifications", {
+        "color": "#C084FC",
+        "sounds": []
+      }]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "5433fd20-8302-4bb6-9834-e6e6255d0d2b"
+      }
     }
   }
 }
