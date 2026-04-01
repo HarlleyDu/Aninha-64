@@ -1,11 +1,11 @@
 // ============================================================
 // DuoTrack — App.js
-// Versão: alpha 0.0.34
+// Versão: alpha 0.0.36
 // ============================================================
 //
 // ════════════════════════════════════════════════════════════
 // 💊 DUOTRACK — DOSSIÊ DEFINITIVO v4.0
-// Atualizado até alpha 0.0.34 — passar para qualquer IA continuar.
+// Atualizado até alpha 0.0.36 — passar para qualquer IA continuar.
 // ════════════════════════════════════════════════════════════
 //
 // ┌─────────────────────────────────────────────────────────┐
@@ -312,7 +312,7 @@ try {
   console.error("Firebase Init Error:", e);
 }
 
-const VERSAO_ATUAL  = "alpha 0.0.34";
+const VERSAO_ATUAL  = "alpha 0.0.36";
 const ADMIN_EMAIL   = "Harlleyduarte@gmail.com";
 
 // ── Sistema de Pet ──────────────────────────────────────────────
@@ -638,18 +638,16 @@ function PetOrbital({ pet, tamanho = 100, mostrarParceiro = false, petParceiro =
       Animated.timing(orbitAnim, { toValue: 1, duration: 8000, useNativeDriver: false })
     ).start();
     Animated.loop(Animated.sequence([
-      Animated.timing(floatAnim, { toValue: -6, duration: 1000, useNativeDriver: true }),
-      Animated.timing(floatAnim, { toValue: 0, duration: 1000, useNativeDriver: true }),
+      Animated.timing(floatAnim, { toValue: -6, duration: 1000, useNativeDriver: false }),
+      Animated.timing(floatAnim, { toValue: 0, duration: 1000, useNativeDriver: false }),
     ])).start();
   }, []);
 
   if (!pet) return null;
 
-  const faseInfo = PET_FASES[pet.fase] || PET_FASES[1];
-  const tipoInfo = PET_TIPOS[pet.tipo] || PET_TIPOS.fogo;
   const raioX = tamanho * 0.75;
   const raioY = tamanho * 0.35;
-  const INCL = 0.42; // ~24 graus
+  const INCL = 0.42; 
 
   const renderPet = (p, offset = 0) => {
     if (!p) return null;
@@ -677,9 +675,10 @@ function PetOrbital({ pet, tamanho = 100, mostrarParceiro = false, petParceiro =
       outputRange: [1, 1.2, 1, 0.8, 1]
     });
 
+    // zIndex dinâmico: > 0 na frente, < 0 atrás
     const zIndex = pos.interpolate({
       inputRange: [0, Math.PI/2, Math.PI, 3*Math.PI/2, Math.PI*2],
-      outputRange: [1, 10, 1, -1, 1]
+      outputRange: [1, 10, 1, -10, 1]
     });
 
     return (
@@ -697,6 +696,11 @@ function PetOrbital({ pet, tamanho = 100, mostrarParceiro = false, petParceiro =
           padding: 4,
           borderWidth: 1,
           borderColor: cor,
+          shadowColor: cor,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.8,
+          shadowRadius: 6,
+          elevation: 5,
         }}>
           <Text style={{ fontSize: 22 }}>{fInfo.emoji}</Text>
         </View>
@@ -713,9 +717,43 @@ function PetOrbital({ pet, tamanho = 100, mostrarParceiro = false, petParceiro =
       height: tamanho,
       alignItems: 'center',
       justifyContent: 'center',
+      zIndex: 5, // Garante que o container permita zIndex negativo dos filhos em relação à foto
     }}>
       {renderPet(pet, 0)}
       {mostrarParceiro && petParceiro && renderPet(petParceiro, Math.PI)}
+    </View>
+  );
+}
+
+function BannerPerfil({ pet, tema }) {
+  if (!pet) return null;
+  const tInfo = PET_TIPOS[pet.tipo] || PET_TIPOS.fogo;
+  const cor = tInfo.cor;
+  const isSecreto = pet.tipo.includes('secreto');
+  
+  return (
+    <View style={{
+      width: '100%',
+      height: 60,
+      borderRadius: 16,
+      marginBottom: -30,
+      overflow: 'hidden',
+      backgroundColor: cor + '22',
+      borderWidth: 1,
+      borderColor: cor + '44',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+    }}>
+      <LinearGradient
+        colors={[cor + '44', 'transparent', cor + '44']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={{ position: 'absolute', width: '100%', height: '100%' }}
+      />
+      <Text style={{ color: cor, fontWeight: '900', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', opacity: 0.8 }}>
+        {isSecreto ? '✧ GUARDIÃO LENDÁRIO ✧' : `✦ MESTRE DE ${pet.tipo} ✦`}
+      </Text>
     </View>
   );
 }
@@ -2342,7 +2380,7 @@ Ele sairá do seu perfil permanentemente.`,
     const base = getBasePath();
     // alpha 0.0.27: mulher pode marcar/desmarcar dias no próprio calendário sem ser admin
     // Admin tem o toggle completo (com estorno de recompensas)
-    if (!isAdmin && !ehMulher) return; // homem sem admin não faz nada
+    // Qualquer um pode marcar/desmarcar
 
     try {
       if (historico[key]) {
@@ -2374,7 +2412,7 @@ Ele sairá do seu perfil permanentemente.`,
           }
           await remove(ref(db, `${base}/historico/${key}`));
         if (!casalId) setHistorico(prev => { const n = {...prev}; delete n[key]; return n; });
-          Alert.alert('Admin', `Dia ${key} desmarcado e recompensas revertidas.`);
+          
         } else {
           // Mulher comum: só desmarca visualmente, sem estorno
           await remove(ref(db, `${base}/historico/${key}`));
@@ -2959,10 +2997,16 @@ O relatório será salvo no app.`;
             </TouchableOpacity>
             {perfilUsuarioVisto && <>
               <View style={{ alignItems: 'center', marginBottom: 16 }}>
-                {perfilUsuarioVisto.foto
-                  ? <Image source={{ uri: perfilUsuarioVisto.foto }} style={{ width: 90, height: 90, borderRadius: 45, borderWidth: 3, borderColor: tema.primary }} />
-                  : <View style={{ width: 90, height: 90, borderRadius: 45, backgroundColor: tema.card, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: tema.primary }}><Text style={{ fontSize: 40 }}>👤</Text></View>
-                }
+                <BannerPerfil pet={perfilUsuarioVisto.pet} tema={tema} />
+                <View style={{ position: 'relative', width: 90, height: 90, marginTop: 10 }}>
+                  {perfilUsuarioVisto.foto
+                    ? <Image source={{ uri: perfilUsuarioVisto.foto }} style={{ width: 90, height: 90, borderRadius: 45, borderWidth: 3, borderColor: tema.primary, zIndex: 1 }} />
+                    : <View style={{ width: 90, height: 90, borderRadius: 45, backgroundColor: tema.card, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: tema.primary, zIndex: 1 }}><Text style={{ fontSize: 40 }}>👤</Text></View>
+                  }
+                  {perfilUsuarioVisto.pet && (
+                    <PetOrbital pet={perfilUsuarioVisto.pet} tamanho={90} />
+                  )}
+                </View>
                 {perfilUsuarioVisto.selo && (
                   <View style={{ marginTop: -16, backgroundColor: '#000a', borderRadius: 14, padding: 3, alignSelf: 'center' }}>
                     <Text style={{ fontSize: 20 }}>{ITENS_LOJA.selos.comum.concat(ITENS_LOJA.selos.raro, ITENS_LOJA.selos.lendario).find(s => s.id === perfilUsuarioVisto.selo)?.emoji || '✨'}</Text>
@@ -3567,7 +3611,7 @@ O relatório será salvo no app.`;
         {abaAtiva === 'ranking' && <>
           <Text style={s.secLabel}>🏆 Ranking da dupla</Text>
           {/* Card - Eu */}
-          <TouchableOpacity style={[s.rankCard, { borderLeftWidth: 4, borderLeftColor: tema.primary }]} onPress={() => { setPerfilUsuarioVisto({ uid: authUser?.uid, nome: nomeAtual, foto: fotos[authUser?.uid], selo: seloEquipado, moldura: molduraEquipada, titulo: tituloEquipado ? titulosDesbloqueados[tituloEquipado] : null, pontos: indPontos, streak, antrix }); setModalPerfilUsuario(true); }}>
+          <TouchableOpacity style={[s.rankCard, { borderLeftWidth: 4, borderLeftColor: tema.primary }]} onPress={() => { setPerfilUsuarioVisto({ uid: authUser?.uid, nome: nomeAtual, foto: fotos[authUser?.uid], selo: seloEquipado, moldura: molduraEquipada, titulo: tituloEquipado ? titulosDesbloqueados[tituloEquipado] : null, pontos: indPontos, streak, antrix, pet }); setModalPerfilUsuario(true); }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               {fotos[authUser?.uid]
                 ? <View style={{ position: 'relative' }}>
@@ -3590,7 +3634,7 @@ O relatório será salvo no app.`;
                 const snap = await get(ref(db, `usuarios/${parceiro.uid}`));
                 if (snap.exists()) {
                   const p = snap.val();
-                  setPerfilUsuarioVisto({ uid: parceiro.uid, nome: p.nome, foto: fotos[parceiro.uid], selo: p.seloEquipado, moldura: p.molduraEquipada, titulo: p.tituloEquipado ? p.titulosDesbloqueados?.[p.tituloEquipado] : null, pontos: p.indPontos || 0, streak: p.streak || 0, antrix: p.antrix || 0 });
+                  setPerfilUsuarioVisto({ uid: parceiro.uid, nome: p.nome, foto: fotos[parceiro.uid], selo: p.seloEquipado, moldura: p.molduraEquipada, titulo: p.tituloEquipado ? p.titulosDesbloqueados?.[p.tituloEquipado] : null, pontos: p.indPontos || 0, streak: p.streak || 0, antrix: p.antrix || 0, pet: p.pet });
                   setModalPerfilUsuario(true);
                 }
               } catch(e) {}
@@ -3678,6 +3722,7 @@ O relatório será salvo no app.`;
         {/* PERFIL */}
         {abaAtiva === 'perfil' && <>
           <View style={s.perfilCard}>
+            <BannerPerfil pet={pet} tema={tema} />
             {/* Banner pet secreto */}
             {pet?.bannerAtivo && <BannerPetSecreto tipo={pet.bannerAtivo} tema={tema} />}
 
