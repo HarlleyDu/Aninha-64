@@ -1,11 +1,11 @@
 // ============================================================
 // DuoTrack — App.js
-// Versão: alpha 0.0.33
+// Versão: alpha 0.0.34
 // ============================================================
 //
 // ════════════════════════════════════════════════════════════
 // 💊 DUOTRACK — DOSSIÊ DEFINITIVO v4.0
-// Atualizado até alpha 0.0.33 — passar para qualquer IA continuar.
+// Atualizado até alpha 0.0.34 — passar para qualquer IA continuar.
 // ════════════════════════════════════════════════════════════
 //
 // ┌─────────────────────────────────────────────────────────┐
@@ -312,7 +312,7 @@ try {
   console.error("Firebase Init Error:", e);
 }
 
-const VERSAO_ATUAL  = "alpha 0.0.33";
+const VERSAO_ATUAL  = "alpha 0.0.34";
 const ADMIN_EMAIL   = "Harlleyduarte@gmail.com";
 
 // ── Sistema de Pet ──────────────────────────────────────────────
@@ -635,7 +635,7 @@ function PetOrbital({ pet, tamanho = 100, mostrarParceiro = false, petParceiro =
 
   useEffect(() => {
     Animated.loop(
-      Animated.timing(orbitAnim, { toValue: 1, duration: 8000, useNativeDriver: true })
+      Animated.timing(orbitAnim, { toValue: 1, duration: 8000, useNativeDriver: false })
     ).start();
     Animated.loop(Animated.sequence([
       Animated.timing(floatAnim, { toValue: -6, duration: 1000, useNativeDriver: true }),
@@ -647,72 +647,79 @@ function PetOrbital({ pet, tamanho = 100, mostrarParceiro = false, petParceiro =
 
   const faseInfo = PET_FASES[pet.fase] || PET_FASES[1];
   const tipoInfo = PET_TIPOS[pet.tipo] || PET_TIPOS.fogo;
-  const raio = tamanho * 0.65;
+  const raioX = tamanho * 0.75;
+  const raioY = tamanho * 0.35;
+  const INCL = 0.42; // ~24 graus
 
-  const rotateInterpolate = orbitAnim.interpolate({
-    inputRange: [0, 1], outputRange: ['0deg', '360deg']
-  });
+  const renderPet = (p, offset = 0) => {
+    if (!p) return null;
+    const fInfo = PET_FASES[p.fase] || PET_FASES[1];
+    const tInfo = PET_TIPOS[p.tipo] || PET_TIPOS.fogo;
+    const cor = p.humor === 'triste' ? '#888' : tInfo.cor;
+    
+    const pos = orbitAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0 + offset, (Math.PI * 2) + offset]
+    });
 
-  // Estado visual
-  const corPet = pet.humor === 'triste' ? '#888' : tipoInfo.cor;
-  const opacidadePet = pet.humor === 'dormindo' ? 0.5 : 1;
+    const left = pos.interpolate({
+      inputRange: [0, Math.PI/2, Math.PI, 3*Math.PI/2, Math.PI*2],
+      outputRange: [raioX, 0, -raioX, 0, raioX]
+    });
 
-  return (
-    <Animated.View style={{
-      position: 'absolute',
-      width: tamanho + raio * 2,
-      height: tamanho + raio * 2,
-      left: -(raio),
-      top: -(raio),
-      transform: [{ rotate: rotateInterpolate }],
-    }}>
+    const top = pos.interpolate({
+      inputRange: [0, Math.PI/2, Math.PI, 3*Math.PI/2, Math.PI*2],
+      outputRange: [0, raioY * Math.cos(INCL), 0, -raioY * Math.cos(INCL), 0]
+    });
+
+    const scale = pos.interpolate({
+      inputRange: [0, Math.PI/2, Math.PI, 3*Math.PI/2, Math.PI*2],
+      outputRange: [1, 1.2, 1, 0.8, 1]
+    });
+
+    const zIndex = pos.interpolate({
+      inputRange: [0, Math.PI/2, Math.PI, 3*Math.PI/2, Math.PI*2],
+      outputRange: [1, 10, 1, -1, 1]
+    });
+
+    return (
       <Animated.View style={{
         position: 'absolute',
-        top: 0,
-        left: (tamanho + raio * 2) / 2 - 16,
-        transform: [{ translateY: floatAnim }],
-        opacity: opacidadePet,
+        left: left,
+        top: top,
+        zIndex: zIndex,
+        transform: [{ scale: scale }, { translateY: floatAnim }],
+        opacity: p.humor === 'dormindo' ? 0.5 : 1,
       }}>
         <View style={{
-          backgroundColor: corPet + '33',
+          backgroundColor: cor + '33',
           borderRadius: 20,
           padding: 4,
           borderWidth: 1,
-          borderColor: corPet,
+          borderColor: cor,
         }}>
-          <Text style={{ fontSize: 22 }}>{faseInfo.emoji}</Text>
+          <Text style={{ fontSize: 22 }}>{fInfo.emoji}</Text>
         </View>
-        {pet.humor === 'triste' && (
-          <Text style={{ fontSize: 8, textAlign: 'center', color: '#888' }}>😢</Text>
-        )}
-        {pet.humor === 'dormindo' && (
-          <Text style={{ fontSize: 8, textAlign: 'center', color: '#aaa' }}>💤</Text>
-        )}
+        {p.humor === 'triste' && <Text style={{ fontSize: 8, textAlign: 'center', color: '#888' }}>😢</Text>}
+        {p.humor === 'dormindo' && <Text style={{ fontSize: 8, textAlign: 'center', color: '#aaa' }}>💤</Text>}
       </Animated.View>
+    );
+  };
 
-      {/* Pet do parceiro (órbita oposta) */}
-      {mostrarParceiro && petParceiro && (
-        <View style={{
-          position: 'absolute',
-          bottom: 0,
-          left: (tamanho + raio * 2) / 2 - 16,
-        }}>
-          <View style={{
-            backgroundColor: (PET_TIPOS[petParceiro.tipo]?.cor || '#ff2d78') + '33',
-            borderRadius: 20,
-            padding: 4,
-            borderWidth: 1,
-            borderColor: PET_TIPOS[petParceiro.tipo]?.cor || '#ff2d78',
-          }}>
-            <Text style={{ fontSize: 20 }}>{(PET_FASES[petParceiro.fase] || PET_FASES[1]).emoji}</Text>
-          </View>
-        </View>
-      )}
-    </Animated.View>
+  return (
+    <View style={{
+      position: 'absolute',
+      width: tamanho,
+      height: tamanho,
+      alignItems: 'center',
+      justifyContent: 'center',
+    }}>
+      {renderPet(pet, 0)}
+      {mostrarParceiro && petParceiro && renderPet(petParceiro, Math.PI)}
+    </View>
   );
 }
 
-// ── Banner do pet secreto ────────────────────────────────────────
 function BannerPetSecreto({ tipo, tema }) {
   const pulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -2318,7 +2325,21 @@ Ele sairá do seu perfil permanentemente.`,
     } catch(e) { Alert.alert('Erro', 'Falha ao registrar: ' + e.message); }
   }
 
+    async function adminResetarPet() {
+    Alert.alert('🐾 Resetar Pet', 'Isso removerá o pet permanentemente do banco de dados. Continuar?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Resetar', style: 'destructive', onPress: async () => {
+        try {
+          await remove(ref(db, `usuarios/${authUser.uid}/pet`));
+          setPet(null);
+          Alert.alert('Sucesso', 'Pet removido.');
+        } catch(e) { Alert.alert('Erro', 'Falha ao resetar pet.'); }
+      }}
+    ]);
+  }
+
   async function adminToggleDia(key) {
+    const base = getBasePath();
     // alpha 0.0.27: mulher pode marcar/desmarcar dias no próprio calendário sem ser admin
     // Admin tem o toggle completo (com estorno de recompensas)
     if (!isAdmin && !ehMulher) return; // homem sem admin não faz nada
@@ -2347,7 +2368,7 @@ Ele sairá do seu perfil permanentemente.`,
               const uidPonto = entrada.naJanelaOuro ? (uidMulher || uidMarcou) : uidMarcou;
               if (npAtual[uidPonto] > 0) {
                 npAtual[uidPonto] = (npAtual[uidPonto] || 1) - 1;
-                await set(ref(db, `casais/${casalId}/pontos`), npAtual);
+                if (casalId) await set(ref(db, `casais/${casalId}/pontos`), npAtual);
               }
             }
           }
@@ -2356,18 +2377,18 @@ Ele sairá do seu perfil permanentemente.`,
           Alert.alert('Admin', `Dia ${key} desmarcado e recompensas revertidas.`);
         } else {
           // Mulher comum: só desmarca visualmente, sem estorno
-          await remove(ref(db, `casais/${casalId}/historico/${key}`));
+          await remove(ref(db, `${base}/historico/${key}`));
         }
       } else {
         // Marcar o dia
         if (isAdmin) {
-          await set(ref(db, `casais/${casalId}/historico/${key}`), {
+          await set(ref(db, `${base}/historico/${key}`), {
             data: key, hora: '--:--', tomou: true, quemMarcou: null,
             noHorarioCerto: false, naJanelaOuro: false, adminManual: true,
           });
         } else {
           // Mulher comum: marca como tomado sem recompensa extra (só visual)
-          await set(ref(db, `casais/${casalId}/historico/${key}`), {
+          await set(ref(db, `${base}/historico/${key}`), {
             data: key, hora: '--:--', tomou: true, quemMarcou: authUser.uid,
             noHorarioCerto: false, naJanelaOuro: false, manualMulher: true,
           });
@@ -2507,16 +2528,18 @@ O relatório será salvo no app.`;
   }
 
   async function deletarMensagem(msgId) {
+    const muralPath = casalId ? `casais/${casalId}/mural` : `usuarios/${authUser.uid}/mural`;
     try {
-      await remove(ref(db, `casais/${casalId}/mural/${msgId}`));
+      await remove(ref(db, `${muralPath}/${msgId}`));
     } catch(e) { Alert.alert('Erro', 'Falha ao deletar.'); }
   }
 
   async function adminLimparTodoMural() {
+    const muralPath = casalId ? `casais/${casalId}/mural` : `usuarios/${authUser.uid}/mural`;
     Alert.alert('🗑️ Limpar Mural', 'Apagar TODAS as mensagens?', [
       { text: 'Cancelar', style: 'cancel' },
       { text: 'Apagar tudo', style: 'destructive', onPress: async () => {
-        try { await remove(ref(db, `casais/${casalId}/mural`)); }
+        try { await remove(ref(db, muralPath)); }
         catch(e) { Alert.alert('Erro', 'Falha ao limpar mural.'); }
       }}
     ]);
@@ -3142,6 +3165,7 @@ O relatório será salvo no app.`;
             <Text style={[s.adminBtnTxt, { color: '#ffcc00' }]}>🏆 Desbloquear todas conquistas</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[s.adminBtn, { borderColor: '#ff4444' }]} onPress={adminResetarLoja}><Text style={[s.adminBtnTxt, { color: '#ff4444' }]}>⚠️ Reset Antrix/Loja/Conquistas</Text></TouchableOpacity>
+                    <TouchableOpacity style={[s.adminBtn, { borderColor: '#ff8800' }]} onPress={adminResetarPet}><Text style={[s.adminBtnTxt, { color: '#ff8800' }]}>🐾 Resetar Pet</Text></TouchableOpacity>
           <TouchableOpacity style={s.btnSecondary} onPress={() => setModalAdmin(false)}><Text style={s.btnSecondaryTxt}>Fechar</Text></TouchableOpacity>
         </View></ScrollView></View>
       </Modal>
