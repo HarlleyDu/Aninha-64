@@ -1,142 +1,202 @@
 // ============================================================
 // DuoTrack — App.js
-// Versão: alpha 0.0.26
+// Versão: alpha 0.0.27
 // ============================================================
 //
 // ════════════════════════════════════════════════════════════
-// 💊 DUOTRACK — DOSSIÊ DEFINITIVO v3.0
-// Documento para passar a qualquer IA continuar o desenvolvimento.
+// 💊 DUOTRACK — DOSSIÊ DEFINITIVO v4.0
+// Atualizado até alpha 0.0.27 — passar para qualquer IA continuar.
 // ════════════════════════════════════════════════════════════
 //
-// 🎯 O QUE É ESSE APP
-//   App Android genérico de adesão a rotina diária para duplas.
-//   Qualquer casal pode usar para rastrear qualquer hábito/remédio diário.
-//   - A mulher define o horário; Janela de Ouro = horário da mulher ± 10 min
-//   - Sincroniza em tempo real entre dois celulares via Firebase
-//   - Gamifica com pontos, Antrix (moeda), streak, loja, conquistas
-//   - Privacidade total com pessoas de fora (ranking global: só nome + pontos)
-//   - Notificações especiais para a dupla pareada com Harlleyduarte@gmail.com
+// ┌─────────────────────────────────────────────────────────┐
+// │ 🎯 O QUE É ESSE APP                                     │
+// └─────────────────────────────────────────────────────────┘
+//   App Android de adesão a rotina diária para casais.
+//   A mulher marca diariamente que tomou a pílula.
+//   Ganha pontos, Antrix (moeda), streak, conquistas e títulos.
+//   Sincroniza em tempo real entre os dois celulares via Firebase.
+//
+//   - Janela de Ouro = horário definido pela mulher ± 10 min (SAGRADO)
 //   - Máximo 2 membros por dupla
+//   - Ranking global: expõe APENAS nome + pontos (privacidade)
+//   - Admin: Harlley (Harlleyduarte@gmail.com)
+//   - Distribuição: APK baixado direto pelo app (OTA via Firebase)
+//   - Package: com.harlley.aninha64
 //
-//   Admin:    Harlley (Harlleyduarte@gmail.com)
-//   Distribuição: APK via MediaFire/GitHub
-//   Package:  com.harlley.aninha64
+// ┌─────────────────────────────────────────────────────────┐
+// │ 🔧 STACK TÉCNICA — PROIBIDO ALTERAR                     │
+// └─────────────────────────────────────────────────────────┘
+//   Framework:    React Native via Expo SDK 48
+//   Motor JS:     Hermes
+//   Build:        EAS CLI no Termux (Android)
+//   Backend:      Firebase Realtime Database
+//   Auth:         Firebase Authentication (email + senha)
+//   Storage:      Firebase Storage (fotos de perfil)
+//   Notificações: expo-notifications
+//   Persistência: getReactNativePersistence(AsyncStorage)
 //
-// ============================================================
-// STACK TÉCNICA
-// ============================================================
-//   Framework:   React Native via Expo SDK 48
-//   Motor JS:    Hermes
-//   Build:       EAS CLI no Termux (Android)
-//   Backend:     Firebase Realtime Database
-//   Auth:        Firebase Authentication (email + senha)
-//   Storage:     Firebase Storage (fotos de perfil)
-//   Notificações:expo-notifications
+//   ⛔ NUNCA mudar: SDK version, Hermes, Firebase backend
+//   ⛔ NUNCA usar setPersistence da API web — quebra no RN
+//   ⛔ NUNCA usar uploadString/base64 — usar fetch→blob→uploadBytes
 //
-//   PROIBIDO mudar: SDK, backend, motor JS
-//
-// ============================================================
-// CONTAS E CREDENCIAIS
-// ============================================================
-//   Expo username:   @aninha64 (duarteharlley@gmail.com)
-//   GitHub repo:     https://github.com/HarlleyDu/Aninha-64
+// ┌─────────────────────────────────────────────────────────┐
+// │ 🔑 CONTAS E CREDENCIAIS                                 │
+// └─────────────────────────────────────────────────────────┘
+//   Expo username:    @aninha64  (duarteharlley@gmail.com)
+//   Expo username 2:  harlleydaana
+//   GitHub repo:      https://github.com/HarlleyDu/Aninha-64
 //   Firebase projeto: aninha-64
-//   Package Android: com.harlley.aninha64
-//   EAS Project ID:  5433fd20-8302-4bb6-9834-e6e6255d0d2b
-//   Admin email:     Harlleyduarte@gmail.com
+//   Firebase DB URL:  https://aninha-64-default-rtdb.firebaseio.com
+//   Firebase bucket:  aninha-64.firebasestorage.app
+//   Package Android:  com.harlley.aninha64
+//   EAS Project ID:   5433fd20-8302-4bb6-9834-e6e6255d0d2b
+//   Admin email:      Harlleyduarte@gmail.com
 //
-// ============================================================
-// FIREBASE — ESTRUTURA DO BANCO (não alterar)
-// ============================================================
+// ┌─────────────────────────────────────────────────────────┐
+// │ 🗄️  FIREBASE — ESTRUTURA DO BANCO (não alterar)         │
+// └─────────────────────────────────────────────────────────┘
 //   /usuarios/{uid}
 //     nome, email, isAdmin, casalId, genero, criadoEm
 //     antrix, indPontos, streak
+//     fotoPerfil: "URL permanente Firebase Storage"  ← nunca URI local
+//     horarioPessoal: "HH:MM"
 //     itensComprados: { temas:[], selos:[], molduras:[] }
 //     seloEquipado, molduraEquipada
-//     titulosDesbloqueados, tituloEquipado
-//     conquistas, estatisticas
+//     titulosDesbloqueados/{id}: { titulo, cor }
+//     tituloEquipado: id
+//     conquistas/{id}: { desbloqueada, data }
+//     estatisticas: { rankPrimeiro, antrixTotal, tomadasHorarioPerfeito... }
+//     escudosDisponiveis: número (padrão 2)
+//     ultimoApoio: timestamp
 //
 //   /casais/{casalId}
-//     historico/{"YYYY-MM-DD": {data, hora, tomou, quemMarcou}}
+//     historico/{"YYYY-MM-DD": {data, hora, tomou, quemMarcou,
+//                noHorarioCerto, naJanelaOuro, adminManual?, manualMulher?}}
 //     pausa/{inicio, fim, ativa}
-//     pontos/{uid1: pts, uid2: pts}  ← indexado por uid, genérico
-//     fotos/{uid: "URL Storage"}
+//     pontos/{uid1: pts, uid2: pts}
+//     fotos/{uid: "URL Firebase Storage"}
 //     tema: string (id do tema)
 //     membros/{uid: nome}
-//     sugestoes/ (lista push)
 //     dataInicio: "YYYY-MM-DD"
-//     config/horarioPessoal/{uid}: "HH:MM"
-//     mural/ (mensagens 24h)
+//     config/horariosNotificacao/{uid}: "HH:MM"
+//     mural/{pushId}: {texto, autor, timestamp, uid}
+//     sugestoes/ (lista push)
 //
-//   /pairCodes/{chave6chars} → {casalId} (deletado após uso)
-//   /config → {versao, apkUrl, changelog, forcarAtualizar} (OTA)
+//   /pairCodes/{chave6chars}
+//     → { casalId }                         ← gerado por quem JÁ tem casal
+//     → { geradoPor: uid, nomeCriador: str } ← gerado por quem NÃO tem casal
+//     (casal criado em entrarCasal(), deletado após uso)
 //
-// ============================================================
-// MECÂNICA SAGRADA — JANELA DE OURO (NUNCA REMOVER)
-// ============================================================
-//   Horário: definido pela mulher da dupla ± 10 min
-//   - Tomou dentro da janela → ponto para Ana
+//   /config → { versao, apkUrl, changelog, forcarAtualizar }  ← OTA
+//
+// ┌─────────────────────────────────────────────────────────┐
+// │ ⭐ MECÂNICA SAGRADA — JANELA DE OURO (NUNCA REMOVER)    │
+// └─────────────────────────────────────────────────────────┘
+//   Constante: JANELA_TOLERANCIA_MIN = 10
+//   - Tomou dentro da janela → ponto para a mulher da dupla
 //   - Tomou fora da janela   → ponto para quem marcou
 //   - Ciclo de 28 dias       → confete + nova cartela
-//   - Pausa de 4 dias disponível (admin)
+//   - Pausa de 4 dias disponível (admin ativa, qualquer mulher vê)
 //
-// ============================================================
-// SISTEMA DE RECOMPENSAS
-// ============================================================
-//   Antrix: moeda interna do app
-//   - Ganhos ao marcar a pílula (mais streak = mais Antrix)
-//   - Usados na Loja para comprar temas, selos e molduras
-//   indPontos: pontuação individual do usuário
-//   streak: dias consecutivos marcando na Janela de Ouro
+// ┌─────────────────────────────────────────────────────────┐
+// │ 💠 SISTEMA DE RECOMPENSAS                               │
+// └─────────────────────────────────────────────────────────┘
+//   Antrix: moeda interna — ganho ao marcar, gasto na Loja
+//   indPontos: pontuação individual (base do ranking)
+//   streak: dias consecutivos marcando
+//   escudosDisponiveis: 2 por padrão — protege streak da parceira
+//   ultimoApoio: timestamp do último apoio enviado ao parceiro
 //
-// ============================================================
-// ABAS DO APP (8 abas, navegação por swipe ou toque)
-// ============================================================
+// ┌─────────────────────────────────────────────────────────┐
+// │ 📱 ABAS DO APP (swipe ou toque na barra inferior)       │
+// └─────────────────────────────────────────────────────────┘
 //   🏠 home       → status do dia, countdown, botão marcar
-//   📅 calendario → histórico mensal navegável
-//   🏆 ranking    → pontos da dupla
-//   🛒 loja       → comprar temas, selos, molduras com Antrix
-//   🏅 conquistas → lista de conquistas e títulos
-//   💌 mural      → mensagens do casal (24h)
+//   📅 calendario → histórico mensal (mulher clica e marca vermelho)
+//   🏆 ranking    → pontos da dupla + global
+//   🏅 conquistas → conquistas e títulos desbloqueados
+//   💌 mural      → mensagens 24h (pareado: vê parceiro / solo: só você)
 //   💡 sugestoes  → caixa de sugestões para o Harlley
 //   👤 perfil     → foto, stats, customização, configurações
 //
-// ============================================================
-// ADMIN (vinculado ao email Harlleyduarte@gmail.com)
-// ============================================================
-//   - Definir data de início da cartela
+// ┌─────────────────────────────────────────────────────────┐
+// │ 👑 ADMIN (email: Harlleyduarte@gmail.com)               │
+// └─────────────────────────────────────────────────────────┘
+//   - Toggle completo no calendário (COM estorno de recompensas)
+//   - Definir/redefinir data de início da cartela
 //   - Iniciar/encerrar pausa de 4 dias
-//   - Remover registro do dia
-//   - Antrix infinito (teste)
-//   - Desbloquear todos itens da loja
-//   - Desbloquear todas conquistas
-//   - Reset Antrix/Loja/Conquistas
+//   - Antrix infinito, desbloquear tudo, reset geral
+//   - Painel admin na aba Perfil
 //
-// ============================================================
-// LIVRO NEGRO — Erros conhecidos (nunca repetir)
-// ============================================================
-//   ❌ uploadString com base64 → usar fetch(uri)→blob→uploadBytes
-//   ❌ setPersistence web API no RN → usar getReactNativePersistence
-//   ❌ ConsistencyCircle com RADIUS=(SW-80)/2 → tela inteira
-//   ❌ Estado inicial 'auth' → usar 'splash', deixar onAuthStateChanged decidir
+// ┌─────────────────────────────────────────────────────────┐
+// │ 🔄 SISTEMA OTA — ATUALIZAÇÃO PELO APP                   │
+// └─────────────────────────────────────────────────────────┘
+//   Ao abrir: app consulta /config no Firebase.
+//   Se versao Firebase > VERSAO_ATUAL → modal de atualização.
+//   Usuário toca "Baixar e instalar" → baixa APK → instala.
+//
+//   Script: ~/aninha64/publicar.sh
+//   Fluxo completo de lançamento:
+//     1. cp /sdcard/Download/App_alpha_X_X_X.js ~/aninha64/App.js
+//     2. grep 'VERSAO_ATUAL' ~/aninha64/App.js        ← confirmar versão
+//     3. cd ~/aninha64 && git add App.js && git commit -m "vX" && git push
+//     4. npx expo start --lan                         ← testar no Expo Go
+//     5. EAS_SKIP_AUTO_FINGERPRINT=1 eas build --platform android --profile preview --non-interactive
+//     6. bash ~/aninha64/publicar.sh                  ← publica no Firebase
+//   Parceira abre o app e vê o modal automaticamente.
+//
+// ┌─────────────────────────────────────────────────────────┐
+// │ 🏗️  REGRAS PARA QUALQUER IA QUE CONTINUAR              │
+// └─────────────────────────────────────────────────────────┘
+//   1.  NUNCA gerar App.js completo do zero — só mudanças cirúrgicas
+//   2.  Cada mudança = nova versão "alpha X.X.X"
+//   3.  Versão em: nome do arquivo, primeiras 10 linhas, tela de perfil
+//   4.  Janela de Ouro é SAGRADA — nunca remover ou alterar
+//   5.  Foto: SEMPRE upload Firebase Storage → salvar URL permanente
+//       NUNCA salvar URI local (some ao fechar o app)
+//   6.  getStorage() SEMPRE com firebaseApp: getStorage(firebaseApp)
+//   7.  Título equipado: SOMENTE abaixo do nome na aba Perfil
+//       com badge contorno branco — NÃO no header nem no ranking
+//   8.  Calendário: mulher clica e marca/desmarca qualquer dia
+//       Admin: toggle completo com estorno de recompensas
+//   9.  marcarTomou() e adminToggleDia() requerem casalId
+//       Sem casal → não marca (comportamento correto)
+//  10.  gerarCodigoConvite() NÃO cria casal — casal criado só em entrarCasal()
+//  11.  Ranking global: filtrar só uid com casalId OU streak > 0
+//  12.  Cadastro: dar boas_vindas E criar_conta simultaneamente
+//  13.  Início da cartela: disponível para QUALQUER mulher (não só admin)
+//  14.  Horário: TextInput editável + setas ▲▼ funcionando juntos
+//  15.  Mural sem casal: salva/exibe só para o próprio usuário
+//       Mural com casal: ambos membros veem mensagens um do outro
+//
+// ┌─────────────────────────────────────────────────────────┐
+// │ 📖 LIVRO NEGRO — Erros conhecidos (nunca repetir)       │
+// └─────────────────────────────────────────────────────────┘
+//   ❌ uploadString/base64 → fetch(uri) → blob → uploadBytes
+//   ❌ getStorage() sem arg → getStorage(firebaseApp)
+//   ❌ URI local na foto → some ao fechar; usar URL do Storage
+//   ❌ setPersistence web API → getReactNativePersistence(AsyncStorage)
+//   ❌ ConsistencyCircle RADIUS=(SW-80)/2 → ocupa tela inteira
+//   ❌ Estado inicial 'auth' → usar 'splash', onAuthStateChanged decide
 //   ❌ PanResponder sem ref → usar abaAtivaRef para swipe correto
-//   ❌ Build sem EAS_SKIP_AUTO_FINGERPRINT=1 → fingerprint bug
+//   ❌ Build sem EAS_SKIP_AUTO_FINGERPRINT=1 → fingerprint bug EAS
+//   ❌ Criar casal em gerarCodigoConvite → só em entrarCasal()
+//   ❌ adminToggleDia sem checar ehMulher → bloqueia mulher no calendário
+//   ❌ Título fora da aba Perfil → aparece em lugares indevidos
+//   ❌ Ranking sem filtro → contas fantasma sujam o global
 //
-// ============================================================
-// CHANGELOG
-// ============================================================
-//   alpha 0.0.1 — countdown em segundos, botão verde na janela,
-//                 admin desbloquear conquistas, barra de abas menor
-//   alpha 0.0.2 — ConsistencyCircle compacto (80px), não ocupa tela
-//   alpha 0.0.3 — documentação completa no código
-//   alpha 0.0.23 — login/cadastro navega direto, sem tela pair, sem horário fixo
-//   alpha 0.0.25 — 8 bugs corrigidos + papel do homem + escudo streak + apoio diário
-//   alpha 0.0.26 — título só abaixo do nome (removido header/configs); conquista
-//                  criar_conta dada no cadastro; calendário: qualquer mulher clica e
-//                  marca vermelho; gerar código sem precisar ter casal; horário
-//                  editável por teclado além das setas; início da cartela liberado
-//                  para qualquer mulher (sem precisar ser admin); ranking global
-//                  filtra só contas ativas (casalId ou streak > 0)
+// ┌─────────────────────────────────────────────────────────┐
+// │ 📋 CHANGELOG                                            │
+// └─────────────────────────────────────────────────────────┘
+//   alpha 0.0.1  — countdown em segundos, botão verde na janela,
+//                  admin desbloquear conquistas, barra de abas menor
+//   alpha 0.0.2  — ConsistencyCircle compacto (80px)
+//   alpha 0.0.3  — documentação completa no código
+//   alpha 0.0.23 — login/cadastro direto, sem tela pair, sem horário fixo
+//   alpha 0.0.25 — 8 bugs + papel do homem + escudo streak + apoio diário
+//   alpha 0.0.26 — 9 fixes (titulo, cadastro, calendario, convite, horario,
+//                  cartela, foto Storage, ranking, getStorage fix)
+//   alpha 0.0.27 — dossiê atualizado para v4.0 com todas as regras,
+//                  livro negro e fluxo OTA documentados no código
 //
 // ============================================================
 
@@ -183,7 +243,7 @@ try {
   console.error("Firebase Init Error:", e);
 }
 
-const VERSAO_ATUAL  = "alpha 0.0.26";
+const VERSAO_ATUAL  = "alpha 0.0.27";
 const ADMIN_EMAIL   = "Harlleyduarte@gmail.com";
 const JANELA_TOLERANCIA_MIN = 10; // janela de ouro = horário definido ± 10 min
 const { width: SW } = Dimensions.get('window');
@@ -1176,7 +1236,7 @@ export default function App() {
       const conquBV = { desbloqueada: true, data: new Date().toISOString() };
       await update(ref(db, `usuarios/${cred.user.uid}/conquistas/boas_vindas`), conquBV);
     } catch(e2) {}
-    // alpha 0.0.26: dar conquista criar_conta também no cadastro
+    // alpha 0.0.27: dar conquista criar_conta também no cadastro
     try {
       const conquCC = { desbloqueada: true, data: new Date().toISOString() };
       await update(ref(db, `usuarios/${cred.user.uid}/conquistas/criar_conta`), conquCC);
@@ -1270,7 +1330,7 @@ export default function App() {
         const dados = snap.val();
         let cid = dados.casalId;
 
-        // alpha 0.0.26: código pode ter sido gerado sem casal (só geradoPor)
+        // alpha 0.0.27: código pode ter sido gerado sem casal (só geradoPor)
         if (!cid && dados.geradoPor) {
           const uidCriador = dados.geradoPor;
           // Cria o casal agora com os dois membros
@@ -1323,7 +1383,7 @@ export default function App() {
     let chave = '';
     for (let i = 0; i < 6; i++) chave += chars[Math.floor(Math.random() * chars.length)];
     try {
-      // alpha 0.0.26: gera código sem criar casal automaticamente.
+      // alpha 0.0.27: gera código sem criar casal automaticamente.
       // Se já tem casal, vincula ao casal existente. Se não tem, salva só o uid
       // para que quando a parceira entrar com o código, ela crie o casal e adicione os dois.
       if (casalId) {
@@ -1599,7 +1659,7 @@ export default function App() {
   }
 
   async function adminToggleDia(key) {
-    // alpha 0.0.26: mulher pode marcar/desmarcar dias no próprio calendário sem ser admin
+    // alpha 0.0.27: mulher pode marcar/desmarcar dias no próprio calendário sem ser admin
     // Admin tem o toggle completo (com estorno de recompensas)
     if (!isAdmin && !ehMulher) return; // homem sem admin não faz nada
     if (!casalId) return;
@@ -1806,7 +1866,7 @@ O relatório será salvo no app.`;
       const snapshot = await get(ref(db, 'usuarios'));
       if (snapshot.exists()) {
         const data = snapshot.val();
-        // alpha 0.0.26: filtra contas ativas — precisa ter casalId OU streak > 0
+        // alpha 0.0.27: filtra contas ativas — precisa ter casalId OU streak > 0
         // Remove contas fantasma/teste que nunca usaram o app de verdade
         let lista = Object.values(data)
           .filter(u => (u.indPontos || 0) > 0 && (u.casalId || (u.streak || 0) > 0))
@@ -1846,9 +1906,9 @@ O relatório será salvo no app.`;
     if (!result.canceled && result.assets[0].uri) {
       const uri = result.assets[0].uri;
       try {
-        // alpha 0.0.26: faz upload para Firebase Storage e salva URL permanente
+        // alpha 0.0.27: faz upload para Firebase Storage e salva URL permanente
         // URI local some quando o app fecha — URL do Storage persiste sempre
-        const storage = getStorage();
+        const storage = getStorage(firebaseApp);
         const resp = await fetch(uri);
         const blob = await resp.blob();
         const storageRef = sRef(storage, `fotos/${authUser.uid}/perfil.jpg`);
@@ -2332,7 +2392,7 @@ O relatório será salvo no app.`;
               <TouchableOpacity onPress={() => setHorarioHH(h => String((parseInt(h)+1)%24).padStart(2,'0'))} style={{ padding: 12 }}>
                 <Text style={{ color: tema.primary, fontSize: 28, fontWeight: '900' }}>▲</Text>
               </TouchableOpacity>
-              {/* alpha 0.0.26: TextInput editável direto — toca o número e digita */}
+              {/* alpha 0.0.27: TextInput editável direto — toca o número e digita */}
               <TextInput
                 style={{ color: '#fff', fontSize: 48, fontWeight: '900', width: 80, textAlign: 'center', padding: 0 }}
                 value={horarioHH}
@@ -2358,7 +2418,7 @@ O relatório será salvo no app.`;
               <TouchableOpacity onPress={() => setHorarioMM(m => String((parseInt(m)+5)%60).padStart(2,'0'))} style={{ padding: 12 }}>
                 <Text style={{ color: tema.primary, fontSize: 28, fontWeight: '900' }}>▲</Text>
               </TouchableOpacity>
-              {/* alpha 0.0.26: TextInput editável direto — toca o número e digita */}
+              {/* alpha 0.0.27: TextInput editável direto — toca o número e digita */}
               <TextInput
                 style={{ color: '#fff', fontSize: 48, fontWeight: '900', width: 80, textAlign: 'center', padding: 0 }}
                 value={horarioMM}
@@ -2811,7 +2871,7 @@ O relatório será salvo no app.`;
               )}
             </TouchableOpacity>
             <Text style={s.perfilNome}>{nomeAtual}</Text>
-            {/* alpha 0.0.26: título SOMENTE aqui (abaixo do nome), com contorno branco */}
+            {/* alpha 0.0.27: título SOMENTE aqui (abaixo do nome), com contorno branco */}
             {tituloEquipado && titulosDesbloqueados[tituloEquipado] && (() => {
               const td = titulosDesbloqueados[tituloEquipado];
               if (tituloEquipado === 'amor_64') {
@@ -2895,7 +2955,7 @@ O relatório será salvo no app.`;
                 }
               </Text>
             </TouchableOpacity>
-            {/* alpha 0.0.26: Início cartela liberado para qualquer mulher (não só admin) */}
+            {/* alpha 0.0.27: Início cartela liberado para qualquer mulher (não só admin) */}
             <TouchableOpacity
               style={[s.setorBtn, !ehMulher && { opacity: 0.5 }]}
               onPress={() => {
