@@ -1,11 +1,11 @@
 // ============================================================
 // DuoTrack — App.js
-// Versão: alpha 0.0.32
+// Versão: alpha 0.0.33
 // ============================================================
 //
 // ════════════════════════════════════════════════════════════
 // 💊 DUOTRACK — DOSSIÊ DEFINITIVO v4.0
-// Atualizado até alpha 0.0.32 — passar para qualquer IA continuar.
+// Atualizado até alpha 0.0.33 — passar para qualquer IA continuar.
 // ════════════════════════════════════════════════════════════
 //
 // ┌─────────────────────────────────────────────────────────┐
@@ -265,6 +265,7 @@
 //   alpha 0.0.30 — sistema de pet completo (10 fases, caixas, exploração,
 //   alpha 0.0.31 — correção de SyntaxError na string do easter egg Pet Sombrio
 //   alpha 0.0.32 — correção de SyntaxError na string do easter egg Pet Fofo
+//   alpha 0.0.33 — correção de SyntaxError na string da Caixa Secreta (JSX)
 //                  banner secreto, easter egg sombrio, transferência entre casal)
 // ============================================================
 
@@ -311,7 +312,7 @@ try {
   console.error("Firebase Init Error:", e);
 }
 
-const VERSAO_ATUAL  = "alpha 0.0.32";
+const VERSAO_ATUAL  = "alpha 0.0.33";
 const ADMIN_EMAIL   = "Harlleyduarte@gmail.com";
 
 // ── Sistema de Pet ──────────────────────────────────────────────
@@ -2755,8 +2756,7 @@ O relatório será salvo no app.`;
               ))}
               <View style={{ backgroundColor: '#1a001022', borderRadius: 10, padding: 10, marginTop: 8, borderWidth: 1, borderColor: '#4b0082' }}>
                 <Text style={{ color: '#aa88ff', fontSize: 11, textAlign: 'center' }}>
-                  🔮 Existe uma Caixa Secreta que não pode ser comprada...{'
-'}Descubra como consegui-la.
+                  🔮 Existe uma Caixa Secreta que não pode ser comprada...{'\n'}Descubra como consegui-la.
                 </Text>
               </View>
               <TouchableOpacity style={[s.btnSecondary, { marginTop: 12 }]} onPress={() => setModalCaixas(false)}>
