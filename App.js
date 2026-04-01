@@ -90,6 +90,68 @@
 //   /config → { versao, apkUrl, changelog, forcarAtualizar }  ← OTA
 //
 // ┌─────────────────────────────────────────────────────────┐
+// │ 🐾 SISTEMA DE PET — DUOPET (v1.0)                       │
+// └─────────────────────────────────────────────────────────┘
+//   Cada usuário pode ter 1 pet. Pet só existe após abrir uma caixa na loja.
+//   Sem pet: espaço vazio. Com pet: aparece orbitando a foto no perfil.
+//   Casal pareado: ambos os pets orbitam juntos na tela do parceiro.
+//
+//   /usuarios/{uid}/pet
+//     tipo: "fogo" | "agua" | "natureza" | "secreto_fofo" | "secreto_sombrio"
+//     fase: 1-10  (1=Ovo, 10=???)
+//     xp: número
+//     energia: 0-100  (decai, 0 = triste/trava evolução)
+//     humor: "feliz" | "neutro" | "triste" | "dormindo"
+//     ultimaRefeicao: timestamp  (2 dias sem comer = morre)
+//     ultimaExploracao: timestamp  (explora a cada 4h se com energia boa)
+//     itemExplorado: { nome, raridade, timestamp } | null  (aguarda coleta
+//     itens: { chapeu, acessorio, efeito }  (customização equipada)
+//     bannerAtivo: "fofo" | "sombrio" | null  (só pets secretos)
+//     nome: string (opcional, definido pelo usuário)
+//
+//   FASES DO PET:
+//     1: Ovo         2: Spark      3: Nibble     4: Bloom      5: Bondra
+//     6: Lumis       7: Sorvex     8: Eternis    9: Eonix      10: ??? (secreto)
+//
+//   XP GANHO:
+//     Marcar pílula no horário: +50 XP
+//     Marcar pílula fora do horário: +10 XP (mas humor cai)
+//     Abrir app todo dia: +10 XP
+//     Completar conquista: +30 XP
+//     Comprar na loja: +5 XP
+//     Streak ativo: +streak×2 XP/dia bônus
+//     Dar comida: +20 XP por refeição
+//     Casal ambos cuidaram hoje: +30 XP bônus
+//
+//   MORTE: 2 dias sem comer → pet morre e some. Precisa de nova caixa.
+//   TRISTEZA: pílula fora do horário OU fome > 8h → humor cai, XP trava.
+//   EXPLORAÇÃO: a cada 4h se energia ≥ 50 e com fome ≤ 8h.
+//              Volta com item aleatório (notificação + modal).
+//
+//   CAIXAS DA LOJA (raridades):
+//     Comum, Incomum, Rara, Épica, Lendária Fofa, Lendária Sombria, Secreta
+//     Caixa Secreta: NÃO pode ser comprada — apenas conseguida por ações secretas.
+//
+//   PETS SECRETOS:
+//     🌸 Pet Fofo Secreto: banner fofo (rosa/partículas suaves)
+//        Condição: 🔒 SEGREDO — ver função desbloquearPetSecreto()
+//     🖤 Pet Sombrio Secreto: banner sombrio (preto/partículas dark)
+//        Condição: 🔒 EASTER EGG — sequência secreta de toques. Ver checkEasterEgg()
+//        Disponível para homem E mulher.
+//
+//   TRANSFERÊNCIA: pode dar seu pet para o parceiro pareado.
+//     → pet some do seu perfil, aparece no perfil do parceiro com evolução intacta.
+//
+//   REGRAS PARA IAs QUE CONTINUAREM:
+//     - Pet só existe se usuarios/{uid}/pet existir no Firebase
+//     - Nunca criar pet automaticamente — só via abertura de caixa
+//     - Energia decai 5 a cada 6h (calcular por timestamp)
+//     - Morte verificada ao abrir o app (verificarMortePet)
+//     - Easter egg sombrio: sequência de 7 toques específicos em locais do app
+//       Sequência: perfil→ranking→conquistas→mural→perfil→ranking→conquistas
+//       (navegar essas abas nessa ordem em menos de 30 segundos)
+//
+// ┌─────────────────────────────────────────────────────────┐
 // │ ⭐ MECÂNICA SAGRADA — JANELA DE OURO (NUNCA REMOVER)    │
 // └─────────────────────────────────────────────────────────┘
 //   Constante: JANELA_TOLERANCIA_MIN = 10
@@ -198,6 +260,10 @@
 //   alpha 0.0.27 — dossiê atualizado para v4.0 com todas as regras,
 //                  livro negro e fluxo OTA documentados no código
 //
+//   alpha 0.0.28 — marcar pílula, calendário e data de início funcionam sem casal
+//   alpha 0.0.29 — migração solo→casal automática ao parear
+//   alpha 0.0.30 — sistema de pet completo (10 fases, caixas, exploração,
+//                  banner secreto, easter egg sombrio, transferência entre casal)
 // ============================================================
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -243,8 +309,60 @@ try {
   console.error("Firebase Init Error:", e);
 }
 
-const VERSAO_ATUAL  = "alpha 0.0.27";
+const VERSAO_ATUAL  = "alpha 0.0.30";
 const ADMIN_EMAIL   = "Harlleyduarte@gmail.com";
+
+// ── Sistema de Pet ──────────────────────────────────────────────
+const PET_FASES = [
+  null, // índice 0 não usado
+  { nome: 'Ovo',     emoji: '🥚', xpNecessario: 0   },
+  { nome: 'Spark',   emoji: '✨', xpNecessario: 100  },
+  { nome: 'Nibble',  emoji: '🐣', xpNecessario: 250  },
+  { nome: 'Bloom',   emoji: '🌱', xpNecessario: 500  },
+  { nome: 'Bondra',  emoji: '💫', xpNecessario: 900  },
+  { nome: 'Lumis',   emoji: '🌟', xpNecessario: 1400 },
+  { nome: 'Sorvex',  emoji: '⚡', xpNecessario: 2100 },
+  { nome: 'Eternis', emoji: '🔮', xpNecessario: 3000 },
+  { nome: 'Eonix',   emoji: '🌌', xpNecessario: 4200 },
+  { nome: '???',     emoji: '👁️', xpNecessario: 6000 },
+];
+
+const PET_TIPOS = {
+  fogo:     { nome: 'Fogo',     cor: '#ff4500', corSecundaria: '#ff8c00', emoji: '🔥' },
+  agua:     { nome: 'Água',     cor: '#00bfff', corSecundaria: '#00e5ff', emoji: '💧' },
+  natureza: { nome: 'Natureza', cor: '#00cc66', corSecundaria: '#ffd700', emoji: '🌿' },
+  secreto_fofo:    { nome: '???', cor: '#ff69b4', corSecundaria: '#ffb6c1', emoji: '🌸', secreto: true },
+  secreto_sombrio: { nome: '???', cor: '#1a0030', corSecundaria: '#4b0082', emoji: '🖤', secreto: true },
+};
+
+const PET_CAIXAS = [
+  { id: 'caixa_comum',     nome: 'Caixa Comum',          preco: 50,   raridade: 'Comum',          emoji: '📦', cor: '#aaaaaa' },
+  { id: 'caixa_incomum',   nome: 'Caixa Incomum',        preco: 120,  raridade: 'Incomum',         emoji: '📫', cor: '#55aa55' },
+  { id: 'caixa_rara',      nome: 'Caixa Rara',           preco: 300,  raridade: 'Rara',            emoji: '💼', cor: '#5588ff' },
+  { id: 'caixa_epica',     nome: 'Caixa Épica',          preco: 700,  raridade: 'Épica',           emoji: '🎁', cor: '#aa44ff' },
+  { id: 'caixa_lend_fofa', nome: 'Caixa Lendária Fofa',  preco: 1500, raridade: 'Lendária Fofa',   emoji: '🌸', cor: '#ff69b4' },
+  { id: 'caixa_lend_somb', nome: 'Caixa Lendária Sombria',preco:1500, raridade: 'Lendária Sombria', emoji: '🖤', cor: '#4b0082' },
+  // Caixa Secreta: NÃO comprável — só por conquista
+];
+
+// Probabilidades de pet por caixa
+const PET_CAIXA_CHANCES = {
+  caixa_comum:     ['fogo','agua','natureza'],
+  caixa_incomum:   ['fogo','agua','natureza'],
+  caixa_rara:      ['fogo','agua','natureza'],
+  caixa_epica:     ['fogo','agua','natureza'],
+  caixa_lend_fofa: ['secreto_fofo'],
+  caixa_lend_somb: ['secreto_sombrio'],
+};
+
+// Itens de exploração por raridade
+const PET_ITENS_EXPLORACAO = [
+  { nome: 'Sementinha', raridade: 'Comum',   xpBonus: 10, antrixBonus: 5  },
+  { nome: 'Cristalzinho', raridade: 'Incomum', xpBonus: 25, antrixBonus: 15 },
+  { nome: 'Gema Brilhante', raridade: 'Rara',  xpBonus: 60, antrixBonus: 40 },
+  { nome: 'Fragmento Épico', raridade: 'Épica', xpBonus: 150, antrixBonus: 100 },
+  { nome: 'Essência Lendária', raridade: 'Lendária', xpBonus: 400, antrixBonus: 300 },
+];
 const JANELA_TOLERANCIA_MIN = 10; // janela de ouro = horário definido ± 10 min
 const { width: SW } = Dimensions.get('window');
 
@@ -507,6 +625,122 @@ Notifications.setNotificationHandler({
   handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false }),
 });
 
+// ── Componente Pet Orbital ──────────────────────────────────────
+function PetOrbital({ pet, tamanho = 100, mostrarParceiro = false, petParceiro = null }) {
+  const orbitAnim = useRef(new Animated.Value(0)).current;
+  const floatAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(orbitAnim, { toValue: 1, duration: 8000, useNativeDriver: true })
+    ).start();
+    Animated.loop(Animated.sequence([
+      Animated.timing(floatAnim, { toValue: -6, duration: 1000, useNativeDriver: true }),
+      Animated.timing(floatAnim, { toValue: 0, duration: 1000, useNativeDriver: true }),
+    ])).start();
+  }, []);
+
+  if (!pet) return null;
+
+  const faseInfo = PET_FASES[pet.fase] || PET_FASES[1];
+  const tipoInfo = PET_TIPOS[pet.tipo] || PET_TIPOS.fogo;
+  const raio = tamanho * 0.65;
+
+  const rotateInterpolate = orbitAnim.interpolate({
+    inputRange: [0, 1], outputRange: ['0deg', '360deg']
+  });
+
+  // Estado visual
+  const corPet = pet.humor === 'triste' ? '#888' : tipoInfo.cor;
+  const opacidadePet = pet.humor === 'dormindo' ? 0.5 : 1;
+
+  return (
+    <Animated.View style={{
+      position: 'absolute',
+      width: tamanho + raio * 2,
+      height: tamanho + raio * 2,
+      left: -(raio),
+      top: -(raio),
+      transform: [{ rotate: rotateInterpolate }],
+    }}>
+      <Animated.View style={{
+        position: 'absolute',
+        top: 0,
+        left: (tamanho + raio * 2) / 2 - 16,
+        transform: [{ translateY: floatAnim }],
+        opacity: opacidadePet,
+      }}>
+        <View style={{
+          backgroundColor: corPet + '33',
+          borderRadius: 20,
+          padding: 4,
+          borderWidth: 1,
+          borderColor: corPet,
+        }}>
+          <Text style={{ fontSize: 22 }}>{faseInfo.emoji}</Text>
+        </View>
+        {pet.humor === 'triste' && (
+          <Text style={{ fontSize: 8, textAlign: 'center', color: '#888' }}>😢</Text>
+        )}
+        {pet.humor === 'dormindo' && (
+          <Text style={{ fontSize: 8, textAlign: 'center', color: '#aaa' }}>💤</Text>
+        )}
+      </Animated.View>
+
+      {/* Pet do parceiro (órbita oposta) */}
+      {mostrarParceiro && petParceiro && (
+        <View style={{
+          position: 'absolute',
+          bottom: 0,
+          left: (tamanho + raio * 2) / 2 - 16,
+        }}>
+          <View style={{
+            backgroundColor: (PET_TIPOS[petParceiro.tipo]?.cor || '#ff2d78') + '33',
+            borderRadius: 20,
+            padding: 4,
+            borderWidth: 1,
+            borderColor: PET_TIPOS[petParceiro.tipo]?.cor || '#ff2d78',
+          }}>
+            <Text style={{ fontSize: 20 }}>{(PET_FASES[petParceiro.fase] || PET_FASES[1]).emoji}</Text>
+          </View>
+        </View>
+      )}
+    </Animated.View>
+  );
+}
+
+// ── Banner do pet secreto ────────────────────────────────────────
+function BannerPetSecreto({ tipo, tema }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 1, duration: 1500, useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 0, duration: 1500, useNativeDriver: true }),
+    ])).start();
+  }, []);
+  if (!tipo) return null;
+  const isFofo = tipo === 'fofo';
+  const corPrimaria = isFofo ? '#ff69b4' : '#4b0082';
+  const corSecundaria = isFofo ? '#ffb6c1' : '#1a0030';
+  const emoji = isFofo ? '🌸' : '🖤';
+  const opacidade = pulse.interpolate({ inputRange: [0,1], outputRange: [0.6,1] });
+  return (
+    <Animated.View style={{
+      width: '100%', borderRadius: 12, padding: 10, marginBottom: 10,
+      backgroundColor: corSecundaria,
+      borderWidth: 1.5, borderColor: corPrimaria,
+      opacity: opacidade,
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    }}>
+      <Text style={{ fontSize: 18 }}>{emoji}</Text>
+      <Text style={{ color: corPrimaria, fontWeight: '900', fontSize: 13, letterSpacing: 1 }}>
+        {isFofo ? 'GUARDIÃO DO AMOR' : 'PORTADOR DAS SOMBRAS'}
+      </Text>
+      <Text style={{ fontSize: 18 }}>{emoji}</Text>
+    </Animated.View>
+  );
+}
+
 // Círculo de consistência compacto — não ocupa a tela toda
 function ConsistencyCircle({ historico, dataInicio, tema, horario }) {
   const TOTAL = 30;
@@ -715,6 +949,21 @@ export default function App() {
   const [escudosDisponiveis, setEscudosDisponiveis] = useState(2);
   const [ultimoApoio, setUltimoApoio] = useState(null); // data "YYYY-MM-DD" do último apoio
 
+  // ── Estados do Sistema de Pet ──────────────────────────────────
+  const [pet, setPet] = useState(null); // null = sem pet
+  const [modalPet, setModalPet] = useState(false);
+  const [modalCaixas, setModalCaixas] = useState(false);
+  const [modalTransferirPet, setModalTransferirPet] = useState(false);
+  const [itemExploradoPendente, setItemExploradoPendente] = useState(null);
+  const [modalItemExplorado, setModalItemExplorado] = useState(false);
+  // Easter egg sombrio — rastreia sequência de abas
+  const easterEggSequencia = useRef([]);
+  const easterEggTimer = useRef(null);
+  // Animação do pet
+  const petFloat = useRef(new Animated.Value(0)).current;
+  const petOrbit = useRef(new Animated.Value(0)).current;
+  const petScale = useRef(new Animated.Value(1)).current;
+
   const fadeAmor = useRef(new Animated.Value(0)).current;
   const pulseBtn = useRef(new Animated.Value(1)).current;
   const [modalPerfilUsuario, setModalPerfilUsuario] = useState(false);
@@ -834,7 +1083,27 @@ export default function App() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       try {
-        if (user) { setAuthUser(user); await carregarPerfil(user.uid); }
+        if (user) {
+          setAuthUser(user);
+          await carregarPerfil(user.uid);
+          // XP diário ao abrir app (1x por dia)
+          const hoje = todayKey();
+          const snapUltimoLogin = await get(ref(db, `usuarios/${user.uid}/ultimoLoginXP`));
+          if (!snapUltimoLogin.exists() || snapUltimoLogin.val() !== hoje) {
+            await set(ref(db, `usuarios/${user.uid}/ultimoLoginXP`), hoje);
+            // darXpAoPet chamado após carregarPerfil (pet já estará no state)
+            setTimeout(async () => {
+              // re-lê pet do Firebase para garantir estado atualizado
+              const snapPet = await get(ref(db, `usuarios/${user.uid}/pet`));
+              if (snapPet.exists()) {
+                const petAtual = snapPet.val();
+                const novoPet = calcularFasePet({ ...petAtual, xp: (petAtual.xp || 0) + 10 });
+                await update(ref(db, `usuarios/${user.uid}/pet`), { xp: novoPet.xp, fase: novoPet.fase });
+                setPet(novoPet);
+              }
+            }, 2000);
+          }
+        }
         else { resetEstado(); setTela('auth'); }
       } catch(e) { setTela('auth'); }
     });
@@ -865,8 +1134,15 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (casalId) { iniciarListeners(casalId); return () => pararListeners(); }
-  }, [casalId]);
+    if (casalId) {
+      iniciarListeners(casalId);
+      return () => pararListeners();
+    } else if (authUser) {
+      // Modo solo: carrega historico e dataInicio do usuario
+      iniciarListenersSolo(authUser.uid);
+      return () => pararListeners();
+    }
+  }, [casalId, authUser]);
 
   // alpha 0.0.16: marca automaticamente dias perdidos após fim da pausa
   // Se passou do fim da pausa e não tomou no dia seguinte até 00:00, marca falta
@@ -902,6 +1178,27 @@ export default function App() {
     return () => glow.stop();
   }, []);
 
+  // Animação flutuante do pet
+  useEffect(() => {
+    if (!pet) return;
+    const float = Animated.loop(Animated.sequence([
+      Animated.timing(petFloat, { toValue: -8, duration: 1200, useNativeDriver: true }),
+      Animated.timing(petFloat, { toValue: 0, duration: 1200, useNativeDriver: true }),
+    ]));
+    float.start();
+    return () => float.stop();
+  }, [pet]);
+
+  // Animação orbital do pet (órbita ao redor da foto)
+  useEffect(() => {
+    if (!pet) return;
+    const orbit = Animated.loop(
+      Animated.timing(petOrbit, { toValue: 1, duration: 8000, useNativeDriver: true })
+    );
+    orbit.start();
+    return () => orbit.stop();
+  }, [pet]);
+
   function resetEstado() {
     setHistorico({}); setPausa(null); setPontos({});
     setDataInicio(null); setFotos({}); setCasalId(null); setPerfil(null); setCasalConfig({});
@@ -910,6 +1207,8 @@ export default function App() {
     setSeloEquipado(null); setMolduraEquipada(null);
     setTitulosDesbloqueados({}); setTituloEquipado(null);
     setConquistasDesbloqueadas({});
+    setPet(null);
+    easterEggSequencia.current = [];
   }
 
   async function carregarPerfil(uid) {
@@ -927,6 +1226,15 @@ export default function App() {
       setStreak(p.streak || 0);
       setEscudosDisponiveis(p.escudosDisponiveis !== undefined ? p.escudosDisponiveis : 2);
       setUltimoApoio(p.ultimoApoio || null);
+      // Carrega pet se existir
+      if (p.pet) {
+        setPet(p.pet);
+        // Verifica morte por fome e itens de exploração pendentes
+        setTimeout(() => {
+          verificarMortePet(uid, p.pet);
+          verificarExploracaoPet(uid, p.pet);
+        }, 1000);
+      }
       let itens = p.itensComprados || { temas: [], selos: [], molduras: [] };
       if (!itens.temas) itens.temas = [];
       if (!itens.selos) itens.selos = [];
@@ -1025,6 +1333,21 @@ export default function App() {
       }
       configurarAlarmes(cid);
     } catch(e) { console.error('Listener Error:', e); }
+  }
+
+  function iniciarListenersSolo(uid) {
+    pararListeners();
+    const paths = ['historico', 'dataInicio', 'pausa'];
+    paths.forEach(p => {
+      const r = ref(db, `usuarios/${uid}/solo/${p}`);
+      const unsub = onValue(r, snap => {
+        const val = snap.val();
+        if (p === 'historico') setHistorico(val || {});
+        if (p === 'dataInicio' && val) setDataInicio(val);
+        if (p === 'pausa') setPausa(val);
+      });
+      listenersRef.current.push({ r, unsub });
+    });
   }
 
   function pararListeners() {
@@ -1300,6 +1623,274 @@ export default function App() {
     );
   }
 
+  // ══════════════════════════════════════════════════════════════
+  // SISTEMA DE PET
+  // ══════════════════════════════════════════════════════════════
+
+  function calcularEnergiaAtual(petData) {
+    if (!petData) return 0;
+    const agora = Date.now();
+    const horasPassadas = (agora - (petData.ultimaRefeicao || agora)) / (1000 * 60 * 60);
+    const decaimento = Math.floor(horasPassadas / 6) * 5;
+    return Math.max(0, (petData.energia || 100) - decaimento);
+  }
+
+  async function verificarMortePet(uid, petData) {
+    if (!petData) return;
+    const agora = Date.now();
+    const diasSemComer = (agora - (petData.ultimaRefeicao || agora)) / (1000 * 60 * 60 * 24);
+    if (diasSemComer >= 2) {
+      // Pet morre — remove do Firebase e limpa estado
+      await remove(ref(db, `usuarios/${uid}/pet`));
+      setPet(null);
+      Alert.alert('💔 Seu pet morreu...', 'Faz 2 dias sem comer. Abra uma nova caixa para ter um pet novamente.');
+    }
+  }
+
+  async function verificarExploracaoPet(uid, petData) {
+    if (!petData) return;
+    // Verifica se tem item explorado pendente
+    if (petData.itemExplorado) {
+      setItemExploradoPendente(petData.itemExplorado);
+      setModalItemExplorado(true);
+      return;
+    }
+    // Verifica se pode sair explorar agora (a cada 4h, energia ≥ 50)
+    const agora = Date.now();
+    const horasDesdExploracao = (agora - (petData.ultimaExploracao || 0)) / (1000 * 60 * 60);
+    const energiaAtual = calcularEnergiaAtual(petData);
+    if (horasDesdExploracao >= 4 && energiaAtual >= 50) {
+      // Pet saiu explorar — sorteia item
+      const chances = [70, 20, 7, 2, 1]; // comum, incomum, raro, épico, lendário
+      const roll = Math.random() * 100;
+      let idx = 0;
+      let acc = 0;
+      for (let i = 0; i < chances.length; i++) {
+        acc += chances[i];
+        if (roll < acc) { idx = i; break; }
+      }
+      const item = PET_ITENS_EXPLORACAO[idx];
+      const itemComTimestamp = { ...item, timestamp: agora };
+      await update(ref(db, `usuarios/${uid}/pet`), {
+        ultimaExploracao: agora,
+        itemExplorado: itemComTimestamp,
+      });
+      setPet(prev => prev ? { ...prev, ultimaExploracao: agora, itemExplorado: itemComTimestamp } : prev);
+    }
+  }
+
+  async function coletarItemExploracao() {
+    if (!itemExploradoPendente || !authUser) return;
+    const bonus = itemExploradoPendente.antrixBonus || 0;
+    const xpBonus = itemExploradoPendente.xpBonus || 0;
+    // Aplica recompensas
+    const novoAntrix = antrix + bonus;
+    setAntrix(novoAntrix);
+    await update(ref(db, `usuarios/${authUser.uid}`), { antrix: novoAntrix });
+    // Adiciona XP ao pet
+    const novoPet = { ...pet, xp: (pet.xp || 0) + xpBonus, itemExplorado: null };
+    const petComFase = calcularFasePet(novoPet);
+    setPet(petComFase);
+    await update(ref(db, `usuarios/${authUser.uid}/pet`), { xp: petComFase.xp, fase: petComFase.fase, itemExplorado: null });
+    setItemExploradoPendente(null);
+    setModalItemExplorado(false);
+    Alert.alert('🎒 Item coletado!', `Seu pet voltou com: ${itemExploradoPendente.nome}!
++${xpBonus} XP · +${bonus} Antrix`);
+  }
+
+  function calcularFasePet(petData) {
+    if (!petData) return petData;
+    const xp = petData.xp || 0;
+    let novaFase = 1;
+    for (let i = PET_FASES.length - 1; i >= 1; i--) {
+      if (PET_FASES[i] && xp >= PET_FASES[i].xpNecessario) {
+        novaFase = i;
+        break;
+      }
+    }
+    return { ...petData, fase: novaFase };
+  }
+
+  async function darXpAoPet(xp, motivo) {
+    if (!pet || !authUser) return;
+    const novoPet = calcularFasePet({ ...pet, xp: (pet.xp || 0) + xp });
+    const faseMudou = novoPet.fase !== pet.fase;
+    setPet(novoPet);
+    await update(ref(db, `usuarios/${authUser.uid}/pet`), { xp: novoPet.xp, fase: novoPet.fase });
+    if (faseMudou) {
+      const faseInfo = PET_FASES[novoPet.fase];
+      Alert.alert('🎉 Seu pet evoluiu!', `${pet.nome || 'Seu pet'} virou ${faseInfo?.nome || '???'} ${faseInfo?.emoji || ''}!
+
++200 Antrix de bônus!`);
+      const novoAntrix = antrix + 200;
+      setAntrix(novoAntrix);
+      await update(ref(db, `usuarios/${authUser.uid}`), { antrix: novoAntrix });
+    }
+  }
+
+  async function alimentarPet() {
+    if (!pet || !authUser) return;
+    if (antrix < 20) { Alert.alert('Antrix insuficiente', 'Comida custa 20 Antrix.'); return; }
+    const agora = Date.now();
+    const novoAntrix = antrix - 20;
+    const novoPet = { ...pet, ultimaRefeicao: agora, energia: 100, humor: 'feliz' };
+    setAntrix(novoAntrix);
+    setPet(novoPet);
+    await update(ref(db, `usuarios/${authUser.uid}`), { antrix: novoAntrix });
+    await update(ref(db, `usuarios/${authUser.uid}/pet`), { ultimaRefeicao: agora, energia: 100, humor: 'feliz' });
+    await darXpAoPet(20, 'comida');
+    Alert.alert('😋 Que delícia!', 'Seu pet comeu e ficou feliz! +20 XP');
+  }
+
+  async function abrirCaixa(caixa) {
+    if (antrix < caixa.preco) {
+      Alert.alert('Antrix insuficiente', `Você tem ${antrix} Antrix. A caixa custa ${caixa.preco}.`);
+      return;
+    }
+    if (pet) {
+      Alert.alert('Você já tem um pet!', 'Transfira ou perca o pet atual antes de abrir uma nova caixa.');
+      return;
+    }
+    const chances = PET_CAIXA_CHANCES[caixa.id] || ['fogo','agua','natureza'];
+    const tipoSorteado = chances[Math.floor(Math.random() * chances.length)];
+    const agora = Date.now();
+    const novoPet = {
+      tipo: tipoSorteado,
+      fase: 1,
+      xp: 0,
+      energia: 100,
+      humor: 'feliz',
+      ultimaRefeicao: agora,
+      ultimaExploracao: agora,
+      itemExplorado: null,
+      itens: {},
+      bannerAtivo: tipoSorteado.startsWith('secreto') ? tipoSorteado.replace('secreto_','') : null,
+      nome: null,
+      criadoEm: agora,
+    };
+    const novoAntrix = antrix - caixa.preco;
+    setAntrix(novoAntrix);
+    setPet(novoPet);
+    await update(ref(db, `usuarios/${authUser.uid}`), { antrix: novoAntrix });
+    await set(ref(db, `usuarios/${authUser.uid}/pet`), novoPet);
+    const tipoInfo = PET_TIPOS[tipoSorteado];
+    setModalCaixas(false);
+    Alert.alert(
+      '🎉 Você ganhou um pet!',
+      `Um ovo misterioso ${tipoInfo?.secreto ? '🔮' : tipoInfo?.emoji || '🥚'} apareceu!
+Cuide bem dele para ele evoluir!`
+    );
+  }
+
+  async function transferirPet() {
+    if (!pet || !casalId || !parceiro) {
+      Alert.alert('Erro', 'Você precisa estar pareado para transferir um pet.');
+      return;
+    }
+    Alert.alert(
+      '🐾 Transferir Pet',
+      `Tem certeza que quer dar seu pet para ${parceiro.nome}?
+Ele sairá do seu perfil permanentemente.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Transferir', onPress: async () => {
+          try {
+            // Salva pet no parceiro
+            await set(ref(db, `usuarios/${parceiro.uid}/pet`), pet);
+            // Remove do próprio perfil
+            await remove(ref(db, `usuarios/${authUser.uid}/pet`));
+            setPet(null);
+            setModalTransferirPet(false);
+            Alert.alert('💝 Pet transferido!', `Seu pet foi para ${parceiro.nome}!`);
+          } catch(e) { Alert.alert('Erro', 'Falha ao transferir pet.'); }
+        }}
+      ]
+    );
+  }
+
+  // ── Easter egg pet sombrio secreto ───────────────────────────
+  // Sequência: navegar abas perfil→ranking→conquistas→mural→perfil→ranking→conquistas
+  // em menos de 30 segundos. Disponível para homem E mulher.
+  function checkEasterEgg(aba) {
+    const SEQ = ['perfil','ranking','conquistas','mural','perfil','ranking','conquistas'];
+    easterEggSequencia.current.push(aba);
+    // Mantém só os últimos 7
+    if (easterEggSequencia.current.length > 7) {
+      easterEggSequencia.current = easterEggSequencia.current.slice(-7);
+    }
+    // Reset timer
+    if (easterEggTimer.current) clearTimeout(easterEggTimer.current);
+    easterEggTimer.current = setTimeout(() => {
+      easterEggSequencia.current = [];
+    }, 30000);
+    // Verifica sequência
+    if (JSON.stringify(easterEggSequencia.current) === JSON.stringify(SEQ)) {
+      easterEggSequencia.current = [];
+      desbloquearPetSombrio();
+    }
+  }
+
+  async function desbloquearPetSombrio() {
+    if (!authUser) return;
+    if (pet?.tipo === 'secreto_sombrio') {
+      Alert.alert('🖤', 'Você já tem o Pet Sombrio Secreto!');
+      return;
+    }
+    const agora = Date.now();
+    const petSombrio = {
+      tipo: 'secreto_sombrio',
+      fase: 1,
+      xp: 0,
+      energia: 100,
+      humor: 'feliz',
+      ultimaRefeicao: agora,
+      ultimaExploracao: agora,
+      itemExplorado: null,
+      itens: {},
+      bannerAtivo: 'sombrio',
+      nome: null,
+      criadoEm: agora,
+    };
+    // Se já tem pet, sobrescreve (easter egg é especial)
+    await set(ref(db, `usuarios/${authUser.uid}/pet`), petSombrio);
+    setPet(petSombrio);
+    Alert.alert(
+      '🖤 Easter Egg Descoberto!',
+      'Você encontrou o Pet Sombrio Secreto!
+Ele traz um banner exclusivo ao seu perfil...',
+      [{ text: '🖤 Aceitar destino', style: 'default' }]
+    );
+  }
+
+  // ── Pet fofo secreto — 28 dias streak + parceiro ativo ───────
+  // Verificado em verificarTodasConquistas
+  async function verificarPetFofoSecreto() {
+    if (!authUser || pet?.tipo === 'secreto_fofo') return;
+    if (streak < 28) return;
+    if (!casalId) return;
+    // Verifica se parceiro marcou hoje também
+    const parceiroUid = parceiro?.uid;
+    if (!parceiroUid) return;
+    const snap = await get(ref(db, `usuarios/${parceiroUid}/pet`));
+    const parceiroAtivo = snap.exists(); // parceiro tem pet = ativo
+    if (!parceiroAtivo) return;
+    const agora = Date.now();
+    const petFofo = {
+      tipo: 'secreto_fofo',
+      fase: 1, xp: 0, energia: 100, humor: 'feliz',
+      ultimaRefeicao: agora, ultimaExploracao: agora,
+      itemExplorado: null, itens: {}, bannerAtivo: 'fofo',
+      nome: null, criadoEm: agora,
+    };
+    await set(ref(db, `usuarios/${authUser.uid}/pet`), petFofo);
+    setPet(petFofo);
+    Alert.alert(
+      '🌸 Pet Secreto Desbloqueado!',
+      'Você encontrou o Pet Fofo Secreto!
+Seu perfil ganhou um banner especial! 🌸'
+    );
+  }
+
   async function fazerLogout() {
     try { pararListeners(); await signOut(auth); } catch(e) {}
     resetEstado();
@@ -1315,7 +1906,10 @@ export default function App() {
       await set(ref(db, `casais/${id}`), { criadoEm: new Date().toISOString(), chave, membros: { [authUser.uid]: perfil.nome } });
       await set(ref(db, `pairCodes/${chave}`), { casalId: id });
       await set(ref(db, `usuarios/${authUser.uid}/casalId`), id);
-      setPairChave(chave); setCasalId(id); setPairStep('mostrarChave');
+      setPairChave(chave); setCasalId(id);
+      // Migra dados solo para o novo casal
+      await migrarDadosSoloParaCasal(authUser.uid, id);
+      setPairStep('mostrarChave');
     } catch(e) { Alert.alert('Erro', 'Falha ao criar dupla.'); }
     setPairLoading(false);
   }
@@ -1371,11 +1965,61 @@ export default function App() {
         if (perfil?.genero === 'mulher' && perfil?.horarioPessoal && cid) {
           await update(ref(db, `casais/${cid}/config/horariosNotificacao`), { [authUser.uid]: perfil.horarioPessoal });
         }
+        // Migra dados solo para o casal
+        await migrarDadosSoloParaCasal(authUser.uid, cid);
         setCasalId(cid); setTela('app'); setModalConectar(false);
       } else { Alert.alert('Erro', 'Chave não encontrada.'); }
 
     } catch(e) { Alert.alert('Erro', 'Falha ao entrar na dupla.'); }
     setPairLoading(false);
+  }
+
+  // ── Migração solo → casal ────────────────────────────────────────────────────
+  // Copia historico, dataInicio e pausa de /usuarios/{uid}/solo para /casais/{cid}
+  // Não sobrescreve entradas que já existem no casal
+  async function migrarDadosSoloParaCasal(uid, cid) {
+    try {
+      const soloSnap = await get(ref(db, `usuarios/${uid}/solo`));
+      if (!soloSnap.exists()) return; // nada para migrar
+      const solo = soloSnap.val();
+
+      // Migra dataInicio se o casal não tiver
+      if (solo.dataInicio) {
+        const casalDISnap = await get(ref(db, `casais/${cid}/dataInicio`));
+        if (!casalDISnap.exists()) {
+          await set(ref(db, `casais/${cid}/dataInicio`), solo.dataInicio);
+        }
+      }
+
+      // Migra historico — só adiciona dias que não existem no casal
+      if (solo.historico) {
+        const casalHistSnap = await get(ref(db, `casais/${cid}/historico`));
+        const casalHist = casalHistSnap.exists() ? casalHistSnap.val() : {};
+        const updates = {};
+        for (const [dia, entrada] of Object.entries(solo.historico)) {
+          if (!casalHist[dia]) {
+            updates[`casais/${cid}/historico/${dia}`] = entrada;
+          }
+        }
+        if (Object.keys(updates).length > 0) {
+          // update aceita múltiplos paths de uma vez
+          await update(ref(db, '/'), updates);
+        }
+      }
+
+      // Migra pausa se o casal não tiver pausa ativa
+      if (solo.pausa?.ativa) {
+        const casalPausaSnap = await get(ref(db, `casais/${cid}/pausa`));
+        if (!casalPausaSnap.exists() || !casalPausaSnap.val()?.ativa) {
+          await set(ref(db, `casais/${cid}/pausa`), solo.pausa);
+        }
+      }
+
+      // Remove dados solo após migração
+      await remove(ref(db, `usuarios/${uid}/solo`));
+    } catch(e) {
+      console.warn('Migração solo→casal falhou (não crítico):', e);
+    }
   }
 
   async function gerarCodigoConvite() {
@@ -1451,6 +2095,14 @@ export default function App() {
     if (streakAtual >= 4) { pontosGanhos = 30; antrixGanho = 15; }
     if (streakAtual >= 5) { pontosGanhos = 50; antrixGanho = 25; }
     return { pontosGanhos, antrixGanho };
+  }
+
+  // Retorna o path base para historico/dataInicio/pausa
+  // Se tem casal → usa /casais/{casalId}
+  // Se solo      → usa /usuarios/{uid}/solo
+  function getBasePath() {
+    if (casalId) return `casais/${casalId}`;
+    return `usuarios/${authUser.uid}/solo`;
   }
 
   function calcularStreakAtual() {
@@ -1593,10 +2245,11 @@ export default function App() {
   }
 
   async function adminLimparDiaHoje() {
-    if (!casalId) return;
     try {
+      const base = getBasePath();
       if (historico[hoje]) {
-        await remove(ref(db, `casais/${casalId}/historico/${hoje}`));
+        await remove(ref(db, `${base}/historico/${hoje}`));
+        if (!casalId) setHistorico(prev => { const n = {...prev}; delete n[hoje]; return n; });
         Alert.alert('Admin', 'Registro de hoje removido.');
       } else {
         Alert.alert('Admin', 'Nenhum registro hoje.');
@@ -1605,33 +2258,33 @@ export default function App() {
   }
 
   async function marcarTomou() {
-    if (!casalId) return;
     if (pausa?.ativa) { Alert.alert('⏸️ Pausa ativa', 'Aguarde o fim da pausa.'); return; }
     if (historico[hoje]?.tomou) { Alert.alert('Já tomou hoje', 'Você já registrou a pílula de hoje.'); return; }
     try {
       const agora = new Date();
       const hora = agora.toTimeString().slice(0, 5);
-      // alpha 0.0.19: usa horário dinâmico do casal (definido pela mulher)
+      const base = getBasePath();
+      // Horário pessoal (solo) ou do casal (pareada)
       const horariosDoCalsal = casalConfig?.horariosNotificacao || {};
       const horarioDupla = Object.values(horariosDoCalsal)[0] || null;
       const meuHorarioPessoal = perfil?.horarioPessoal || horarioDupla || null;
-      // naJanela = dentro da janela de ouro (horário da mulher ± 10 min)
       const naJanela = meuHorarioPessoal
         ? estaDentroJanela(meuHorarioPessoal, JANELA_TOLERANCIA_MIN, agora)
         : false;
       const noHorarioCerto = naJanela;
-      // alpha 0.0.18: pontos indexados por uid — genérico para qualquer dupla
-      const np = { ...pontos };
-      // quem ganhou o ponto: se na janela, é a mulher da dupla; senão, quem marcou
-      const uidMulher = Object.entries(casalConfig?.horariosNotificacao || {}).map(([k]) => k)[0] || authUser.uid;
-      const uidGanha = naJanela ? uidMulher : authUser.uid;
-      np[uidGanha] = (np[uidGanha] || 0) + 1;
-      await set(ref(db, `casais/${casalId}/pontos`), np);
-      await set(ref(db, `casais/${casalId}/historico/${hoje}`), {
+      // Salva no historico (casal ou solo)
+      await set(ref(db, `${base}/historico/${hoje}`), {
         data: hoje, hora, tomou: true, quemMarcou: authUser.uid,
-        noHorarioCerto,  // salva se foi no horário correto
-        naJanelaOuro: naJanela,
+        noHorarioCerto, naJanelaOuro: naJanela,
       });
+      // Pontos do casal só se pareada
+      if (casalId) {
+        const np = { ...pontos };
+        const uidMulher = Object.entries(casalConfig?.horariosNotificacao || {}).map(([k]) => k)[0] || authUser.uid;
+        const uidGanha = naJanela ? uidMulher : authUser.uid;
+        np[uidGanha] = (np[uidGanha] || 0) + 1;
+        await set(ref(db, `casais/${casalId}/pontos`), np);
+      }
       const streakAtual = calcularStreakAtual();
       const { pontosGanhos, antrixGanho } = calcularRecompensa(streakAtual);
       const novoStreak = streakAtual + 1;
@@ -1639,6 +2292,10 @@ export default function App() {
       const novoAntrix = antrix + antrixGanho;
       await update(ref(db, `usuarios/${authUser.uid}`), { indPontos: novoIndPontos, antrix: novoAntrix, streak: novoStreak });
       setIndPontos(novoIndPontos); setAntrix(novoAntrix); setStreak(novoStreak);
+      // Atualiza historico local imediatamente (modo solo)
+      if (!casalId) {
+        setHistorico(prev => ({ ...prev, [hoje]: { data: hoje, hora, tomou: true, quemMarcou: authUser.uid, noHorarioCerto, naJanelaOuro: naJanela } }));
+      }
       setEstatisticas(prev => ({
         ...prev,
         antrixTotal: prev.antrixTotal + antrixGanho,
@@ -1653,16 +2310,17 @@ export default function App() {
         Animated.delay(2000),
         Animated.timing(fadeAmor, { toValue: 0, duration: 500, useNativeDriver: true }),
       ]).start(() => setModalAmor(false));
-      await notificarParceiro(hora);
+      if (casalId) await notificarParceiro(hora);
+      // XP ao pet por marcar pílula
+      if (pet) await darXpAoPet(naJanela ? 50 : 10, 'pilula');
       Alert.alert('✅ Feito!', `+${pontosGanhos} pts, +${antrixGanho} Antrix! Streak: ${novoStreak}`);
-    } catch(e) { Alert.alert('Erro', 'Falha ao registrar.'); }
+    } catch(e) { Alert.alert('Erro', 'Falha ao registrar: ' + e.message); }
   }
 
   async function adminToggleDia(key) {
     // alpha 0.0.27: mulher pode marcar/desmarcar dias no próprio calendário sem ser admin
     // Admin tem o toggle completo (com estorno de recompensas)
     if (!isAdmin && !ehMulher) return; // homem sem admin não faz nada
-    if (!casalId) return;
 
     try {
       if (historico[key]) {
@@ -1692,7 +2350,8 @@ export default function App() {
               }
             }
           }
-          await remove(ref(db, `casais/${casalId}/historico/${key}`));
+          await remove(ref(db, `${base}/historico/${key}`));
+        if (!casalId) setHistorico(prev => { const n = {...prev}; delete n[key]; return n; });
           Alert.alert('Admin', `Dia ${key} desmarcado e recompensas revertidas.`);
         } else {
           // Mulher comum: só desmarca visualmente, sem estorno
@@ -1720,9 +2379,12 @@ export default function App() {
     try {
       const ano = new Date().getFullYear();
       const dataStr = `${ano}-${String(pickerMes + 1).padStart(2, '0')}-${String(pickerDia).padStart(2, '0')}`;
-      await set(ref(db, `casais/${casalId}/dataInicio`), dataStr);
+      const base = getBasePath();
+      await set(ref(db, `${base}/dataInicio`), dataStr);
+      setDataInicio(dataStr);
       setModalInicio(false);
-    } catch(e) {}
+      Alert.alert('✅ Data definida', `Cartela iniciada em ${dataStr}`);
+    } catch(e) { Alert.alert('Erro', 'Falha ao salvar data.'); }
   }
 
   function gerarRelatorioMensal() {
@@ -1778,7 +2440,6 @@ export default function App() {
   }
 
   async function analisarEIniciarPausa() {
-    if (!casalId) return;
     const rel = gerarRelatorioMensal();
     const msg = `⏸️ Iniciar pausa?
 
@@ -1808,14 +2469,14 @@ O relatório será salvo no app.`;
   }
 
   async function iniciarPausa() {
-    // Pausa dura 4 dias: início = hoje, fim = hoje + 3 (4 dias inclusive)
-    // Ex: clicou dia 1 → fim = dia 4 → dia 5 já é obrigatório tomar
-    try { await set(ref(db, `casais/${casalId}/pausa`), { inicio: hoje, fim: addDias(hoje, 3), ativa: true }); }
+    const base = getBasePath();
+    try { await set(ref(db, `${base}/pausa`), { inicio: hoje, fim: addDias(hoje, 3), ativa: true }); }
     catch(e) {}
   }
 
   async function despausar() {
-    try { await set(ref(db, `casais/${casalId}/pausa/ativa`), false); } catch(e) {}
+    const base = getBasePath();
+    try { await set(ref(db, `${base}/pausa/ativa`), false); } catch(e) {}
   }
 
   async function enviarSugestao() {
@@ -2037,6 +2698,144 @@ O relatório será salvo no app.`;
             <Text style={s.btnPrimaryTxt}>{baixando ? `Baixando... ${Math.round(otaProgress * 100)}%` : '⬇️ Baixar agora'}</Text>
           </TouchableOpacity>
           {!otaInfo?.forcarAtualizar && <TouchableOpacity style={s.btnSecondary} onPress={ignorarOta}><Text style={s.btnSecondaryTxt}>Lembrar depois</Text></TouchableOpacity>}
+        </View></View>
+      </Modal>
+
+      {/* Modal Item Explorado pelo Pet */}
+      <Modal transparent visible={modalItemExplorado} animationType="slide">
+        <View style={s.modalWrap}><View style={s.modalCard}>
+          <Text style={{ fontSize: 48, textAlign: 'center' }}>🎒</Text>
+          <Text style={s.modalTitulo}>Seu pet voltou!</Text>
+          {itemExploradoPendente && (<>
+            <Text style={{ color: tema.sub, textAlign: 'center', marginBottom: 8 }}>
+              Ele encontrou algo especial durante a exploração...
+            </Text>
+            <View style={{ backgroundColor: tema.bg, borderRadius: 12, padding: 16, alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: tema.primary }}>
+              <Text style={{ fontSize: 32, marginBottom: 4 }}>✨</Text>
+              <Text style={{ color: '#fff', fontWeight: '900', fontSize: 16 }}>{itemExploradoPendente.nome}</Text>
+              <Text style={{ color: tema.primary, fontSize: 12, marginTop: 4 }}>Raridade: {itemExploradoPendente.raridade}</Text>
+              <Text style={{ color: '#00ff87', fontSize: 13, marginTop: 8 }}>+{itemExploradoPendente.xpBonus} XP · +{itemExploradoPendente.antrixBonus} Antrix</Text>
+            </View>
+          </>)}
+          <TouchableOpacity style={s.btnPrimary} onPress={coletarItemExploracao}>
+            <Text style={s.btnPrimaryTxt}>🎉 Coletar!</Text>
+          </TouchableOpacity>
+        </View></View>
+      </Modal>
+
+      {/* Modal de Caixas de Pet */}
+      <Modal transparent visible={modalCaixas} animationType="slide">
+        <View style={s.modalWrap}>
+          <ScrollView>
+            <View style={s.modalCard}>
+              <Text style={s.modalTitulo}>📦 Caixas de Pet</Text>
+              <Text style={{ color: tema.sub, fontSize: 12, marginBottom: 16, textAlign: 'center' }}>
+                Abra uma caixa para ganhar um pet! Seus Antrix: {antrix} 💠
+              </Text>
+              {pet && (
+                <View style={{ backgroundColor: '#ff444422', borderRadius: 10, padding: 10, marginBottom: 12, borderWidth: 1, borderColor: '#ff4444' }}>
+                  <Text style={{ color: '#ff4444', fontSize: 12, textAlign: 'center' }}>
+                    ⚠️ Você já tem um pet! Transfira-o antes de abrir uma nova caixa.
+                  </Text>
+                </View>
+              )}
+              {PET_CAIXAS.map(caixa => (
+                <TouchableOpacity
+                  key={caixa.id}
+                  style={[s.rankCard, { borderLeftWidth: 4, borderLeftColor: caixa.cor, marginBottom: 10 }]}
+                  onPress={() => abrirCaixa(caixa)}
+                  disabled={!!pet}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>{caixa.emoji} {caixa.nome}</Text>
+                    <Text style={{ color: caixa.cor, fontSize: 11, marginTop: 2 }}>Raridade: {caixa.raridade}</Text>
+                  </View>
+                  <Text style={{ color: tema.primary, fontWeight: '900', fontSize: 16 }}>{caixa.preco} 💠</Text>
+                </TouchableOpacity>
+              ))}
+              <View style={{ backgroundColor: '#1a001022', borderRadius: 10, padding: 10, marginTop: 8, borderWidth: 1, borderColor: '#4b0082' }}>
+                <Text style={{ color: '#aa88ff', fontSize: 11, textAlign: 'center' }}>
+                  🔮 Existe uma Caixa Secreta que não pode ser comprada...{'
+'}Descubra como consegui-la.
+                </Text>
+              </View>
+              <TouchableOpacity style={[s.btnSecondary, { marginTop: 12 }]} onPress={() => setModalCaixas(false)}>
+                <Text style={s.btnSecondaryTxt}>Fechar</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Modal Pet */}
+      <Modal transparent visible={modalPet} animationType="slide">
+        <View style={s.modalWrap}><View style={s.modalCard}>
+          {pet ? (<>
+            <Text style={s.modalTitulo}>🐾 Seu Pet</Text>
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <Text style={{ fontSize: 64 }}>{(PET_FASES[pet.fase] || PET_FASES[1]).emoji}</Text>
+              <Text style={{ color: '#fff', fontWeight: '900', fontSize: 18, marginTop: 8 }}>
+                {pet.nome || (PET_FASES[pet.fase] || PET_FASES[1]).nome}
+              </Text>
+              <Text style={{ color: tema.primary, fontSize: 12 }}>
+                {PET_TIPOS[pet.tipo]?.nome} · Fase {pet.fase}/10
+              </Text>
+              <Text style={{ color: pet.humor === 'feliz' ? '#00ff87' : pet.humor === 'triste' ? '#ff4444' : tema.sub, fontSize: 12, marginTop: 4 }}>
+                {pet.humor === 'feliz' ? '😊 Feliz' : pet.humor === 'triste' ? '😢 Triste' : pet.humor === 'dormindo' ? '💤 Dormindo' : '😐 Neutro'}
+              </Text>
+            </View>
+            {/* Barra de XP */}
+            <View style={{ marginBottom: 12 }}>
+              <Text style={{ color: tema.sub, fontSize: 11, marginBottom: 4 }}>
+                XP: {pet.xp} / {PET_FASES[Math.min(pet.fase + 1, 10)]?.xpNecessario || '∞'}
+              </Text>
+              <View style={s.progressWrap}>
+                <View style={[s.progressBar, { width: `${Math.min(100, ((pet.xp - (PET_FASES[pet.fase]?.xpNecessario || 0)) / Math.max(1, ((PET_FASES[Math.min(pet.fase+1,10)]?.xpNecessario || pet.xp+1) - (PET_FASES[pet.fase]?.xpNecessario||0)))) * 100)}%` }]} />
+              </View>
+            </View>
+            {/* Energia */}
+            <Text style={{ color: tema.sub, fontSize: 11, marginBottom: 4 }}>
+              Energia: {calcularEnergiaAtual(pet)}/100
+            </Text>
+            <View style={s.progressWrap}>
+              <View style={[s.progressBar, { width: `${calcularEnergiaAtual(pet)}%`, backgroundColor: calcularEnergiaAtual(pet) > 50 ? '#00ff87' : '#ffd60a' }]} />
+            </View>
+            <TouchableOpacity style={[s.btnPrimary, { marginTop: 16 }]} onPress={alimentarPet}>
+              <Text style={s.btnPrimaryTxt}>🍖 Alimentar (20 Antrix)</Text>
+            </TouchableOpacity>
+            {casalId && parceiro && (
+              <TouchableOpacity style={[s.btnSecondary, { marginTop: 8 }]} onPress={() => { setModalPet(false); setModalTransferirPet(true); }}>
+                <Text style={s.btnSecondaryTxt}>💝 Dar pet para {parceiro.nome}</Text>
+              </TouchableOpacity>
+            )}
+          </>) : (<>
+            <Text style={s.modalTitulo}>🐾 Sem Pet</Text>
+            <Text style={{ color: tema.sub, textAlign: 'center', marginBottom: 16 }}>
+              Abra uma caixa para ganhar seu primeiro pet!
+            </Text>
+            <TouchableOpacity style={s.btnPrimary} onPress={() => { setModalPet(false); setModalCaixas(true); }}>
+              <Text style={s.btnPrimaryTxt}>📦 Ver Caixas</Text>
+            </TouchableOpacity>
+          </>)}
+          <TouchableOpacity style={[s.btnSecondary, { marginTop: 8 }]} onPress={() => setModalPet(false)}>
+            <Text style={s.btnSecondaryTxt}>Fechar</Text>
+          </TouchableOpacity>
+        </View></View>
+      </Modal>
+
+      {/* Modal Transferir Pet */}
+      <Modal transparent visible={modalTransferirPet} animationType="slide">
+        <View style={s.modalWrap}><View style={s.modalCard}>
+          <Text style={s.modalTitulo}>💝 Transferir Pet</Text>
+          <Text style={{ color: tema.sub, textAlign: 'center', marginBottom: 20 }}>
+            Dar seu pet para {parceiro?.nome}? Ele sairá do seu perfil permanentemente.
+          </Text>
+          <TouchableOpacity style={[s.btnPrimary, { backgroundColor: '#ff2d78' }]} onPress={transferirPet}>
+            <Text style={s.btnPrimaryTxt}>💝 Confirmar transferência</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[s.btnSecondary, { marginTop: 8 }]} onPress={() => setModalTransferirPet(false)}>
+            <Text style={s.btnSecondaryTxt}>Cancelar</Text>
+          </TouchableOpacity>
         </View></View>
       </Modal>
 
@@ -2571,7 +3370,7 @@ O relatório será salvo no app.`;
           </View>
 
           {/* Mulher sem data de início — pode definir */}
-          {ehMulher && !dataInicio && casalId && (
+          {ehMulher && !dataInicio && (
             <TouchableOpacity
               style={{ backgroundColor: '#7b2fff22', borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#7b2fff', flexDirection: 'row', alignItems: 'center' }}
               onPress={() => setModalInicio(true)}
@@ -2855,7 +3654,11 @@ O relatório será salvo no app.`;
         {/* PERFIL */}
         {abaAtiva === 'perfil' && <>
           <View style={s.perfilCard}>
-            <TouchableOpacity onPress={escolherFotoGaleria} style={{ position: 'relative' }}>
+            {/* Banner pet secreto */}
+            {pet?.bannerAtivo && <BannerPetSecreto tipo={pet.bannerAtivo} tema={tema} />}
+
+            {/* Foto com pet orbital */}
+            <TouchableOpacity onPress={escolherFotoGaleria} style={{ position: 'relative', width: 100, height: 100 }}>
               {(() => {
                 const moldura = molduraEquipada ? getMolduraById(molduraEquipada) : null;
                 const corBorda = moldura ? (moldura.cor !== 'rainbow' ? moldura.cor : '#ffaa44') : tema.primary;
@@ -2869,6 +3672,26 @@ O relatório será salvo no app.`;
                   <Text style={{ fontSize: 18 }}>{getSeloById(seloEquipado)?.emoji || '✨'}</Text>
                 </View>
               )}
+              {/* Pet orbital ao redor da foto */}
+              {pet && (
+                <PetOrbital
+                  pet={pet}
+                  tamanho={100}
+                  mostrarParceiro={!!(casalId && parceiro)}
+                  petParceiro={null}
+                />
+              )}
+            </TouchableOpacity>
+
+            {/* Botão do pet */}
+            <TouchableOpacity
+              style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: tema.card, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1, borderColor: pet ? tema.primary : tema.border }}
+              onPress={() => setModalPet(true)}
+            >
+              <Text style={{ fontSize: 16 }}>{pet ? (PET_FASES[pet.fase] || PET_FASES[1]).emoji : '🥚'}</Text>
+              <Text style={{ color: pet ? tema.primary : tema.sub, fontSize: 12, fontWeight: '700' }}>
+                {pet ? `${pet.nome || (PET_FASES[pet.fase] || PET_FASES[1]).nome} · F${pet.fase}` : 'Sem pet'}
+              </Text>
             </TouchableOpacity>
             <Text style={s.perfilNome}>{nomeAtual}</Text>
             {/* alpha 0.0.27: título SOMENTE aqui (abaixo do nome), com contorno branco */}
@@ -2920,6 +3743,16 @@ O relatório será salvo no app.`;
               <Text style={s.setorBtnIcon}>🛒</Text>
               <Text style={s.setorBtnLabel}>{antrix} 💠</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={[s.setorBtn, { borderColor: pet ? tema.primary : '#ffd60a' }]} onPress={() => setModalCaixas(true)}>
+              <Text style={s.setorBtnIcon}>📦</Text>
+              <Text style={s.setorBtnLabel}>{pet ? 'Pet' : 'Caixas'}</Text>
+            </TouchableOpacity>
+            {pet && (
+              <TouchableOpacity style={[s.setorBtn, { borderColor: tema.primary }]} onPress={() => setModalPet(true)}>
+                <Text style={s.setorBtnIcon}>{(PET_FASES[pet.fase]||PET_FASES[1]).emoji}</Text>
+                <Text style={s.setorBtnLabel}>Alimentar</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
 
