@@ -1,11 +1,11 @@
 // ============================================================
 // DuoTrack — App.js
-// Versão: alpha 0.0.36
+// Versão: alpha 0.0.37
 // ============================================================
 //
 // ════════════════════════════════════════════════════════════
 // 💊 DUOTRACK — DOSSIÊ DEFINITIVO v4.0
-// Atualizado até alpha 0.0.36 — passar para qualquer IA continuar.
+// Atualizado até alpha 0.0.37 — passar para qualquer IA continuar.
 // ════════════════════════════════════════════════════════════
 //
 // ┌─────────────────────────────────────────────────────────┐
@@ -279,6 +279,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import * as FileSystem from 'expo-file-system';
 import * as IntentLauncher from 'expo-intent-launcher';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { initializeApp } from 'firebase/app';
 import {
@@ -312,7 +313,7 @@ try {
   console.error("Firebase Init Error:", e);
 }
 
-const VERSAO_ATUAL  = "alpha 0.0.36";
+const VERSAO_ATUAL  = "alpha 0.0.37";
 const ADMIN_EMAIL   = "Harlleyduarte@gmail.com";
 
 // ── Sistema de Pet ──────────────────────────────────────────────
