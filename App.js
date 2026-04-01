@@ -1,11 +1,11 @@
 // ============================================================
 // DuoTrack — App.js
-// Versão: alpha 0.0.31
+// Versão: alpha 0.0.32
 // ============================================================
 //
 // ════════════════════════════════════════════════════════════
 // 💊 DUOTRACK — DOSSIÊ DEFINITIVO v4.0
-// Atualizado até alpha 0.0.31 — passar para qualquer IA continuar.
+// Atualizado até alpha 0.0.32 — passar para qualquer IA continuar.
 // ════════════════════════════════════════════════════════════
 //
 // ┌─────────────────────────────────────────────────────────┐
@@ -264,6 +264,7 @@
 //   alpha 0.0.29 — migração solo→casal automática ao parear
 //   alpha 0.0.30 — sistema de pet completo (10 fases, caixas, exploração,
 //   alpha 0.0.31 — correção de SyntaxError na string do easter egg Pet Sombrio
+//   alpha 0.0.32 — correção de SyntaxError na string do easter egg Pet Fofo
 //                  banner secreto, easter egg sombrio, transferência entre casal)
 // ============================================================
 
@@ -310,7 +311,7 @@ try {
   console.error("Firebase Init Error:", e);
 }
 
-const VERSAO_ATUAL  = "alpha 0.0.31";
+const VERSAO_ATUAL  = "alpha 0.0.32";
 const ADMIN_EMAIL   = "Harlleyduarte@gmail.com";
 
 // ── Sistema de Pet ──────────────────────────────────────────────
@@ -1886,8 +1887,7 @@ Ele sairá do seu perfil permanentemente.`,
     setPet(petFofo);
     Alert.alert(
       '🌸 Pet Secreto Desbloqueado!',
-      'Você encontrou o Pet Fofo Secreto!
-Seu perfil ganhou um banner especial! 🌸'
+      'Você encontrou o Pet Fofo Secreto!\nSeu perfil ganhou um banner especial! 🌸'
     );
   }
 
