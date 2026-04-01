@@ -1,11 +1,11 @@
 // ============================================================
 // DuoTrack — App.js
-// Versão: alpha 0.0.40
+// Versão: alpha 0.0.41
 // ============================================================
 //
 // ════════════════════════════════════════════════════════════
 // 💊 DUOTRACK — DOSSIÊ DEFINITIVO v4.0
-// Atualizado até alpha 0.0.40 — passar para qualquer IA continuar.
+// Atualizado até alpha 0.0.41 — passar para qualquer IA continuar.
 // ════════════════════════════════════════════════════════════
 //
 // ┌─────────────────────────────────────────────────────────┐
@@ -313,7 +313,7 @@ try {
   console.error("Firebase Init Error:", e);
 }
 
-const VERSAO_ATUAL  = "alpha 0.0.40";
+const VERSAO_ATUAL  = "alpha 0.0.41";
 const ADMIN_EMAIL   = "Harlleyduarte@gmail.com";
 
 // ── Sistema de Pet ──────────────────────────────────────────────
@@ -676,7 +676,8 @@ function PetOrbital({ pet, tamanho = 100, mostrarParceiro = false, petParceiro =
       outputRange: [1, 1.2, 1, 0.8, 1]
     });
 
-    // zIndex dinâmico: > 0 na frente, < 0 atrás
+    // zIndex dinâmico: > 0 na frente (10), < 0 atrás (-10)
+    // No RN, zIndex negativo em relação ao irmão funciona se o pai permitir.
     const zIndex = pos.interpolate({
       inputRange: [0, Math.PI/2, Math.PI, 3*Math.PI/2, Math.PI*2],
       outputRange: [1, 10, 1, -10, 1]
@@ -703,10 +704,8 @@ function PetOrbital({ pet, tamanho = 100, mostrarParceiro = false, petParceiro =
           shadowRadius: 6,
           elevation: 5,
         }}>
-          <Text style={{ fontSize: 22 }}>{fInfo.emoji}</Text>
+          <Text style={{ fontSize: tamanho * 0.22 }}>{fInfo.emoji}</Text>
         </View>
-        {p.humor === 'triste' && <Text style={{ fontSize: 8, textAlign: 'center', color: '#888' }}>😢</Text>}
-        {p.humor === 'dormindo' && <Text style={{ fontSize: 8, textAlign: 'center', color: '#aaa' }}>💤</Text>}
       </Animated.View>
     );
   };
@@ -718,7 +717,8 @@ function PetOrbital({ pet, tamanho = 100, mostrarParceiro = false, petParceiro =
       height: tamanho,
       alignItems: 'center',
       justifyContent: 'center',
-      zIndex: 5, // Garante que o container permita zIndex negativo dos filhos em relação à foto
+      // O container não deve ter zIndex fixo para permitir que os filhos 
+      // fiquem atrás da foto que está no mesmo nível hierárquico.
     }}>
       {renderPet(pet, 0)}
       {mostrarParceiro && petParceiro && renderPet(petParceiro, Math.PI)}
@@ -735,21 +735,22 @@ function BannerPerfil({ pet, tema }) {
   return (
     <View style={{
       width: '100%',
-      height: 60,
-      borderRadius: 16,
-      marginBottom: -30,
+      height: 40,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      marginBottom: -20,
       overflow: 'hidden',
-      backgroundColor: cor + '15',
-      borderWidth: 1,
-      borderColor: cor + '33',
+      backgroundColor: cor + '10',
+      borderBottomWidth: 1,
+      borderBottomColor: cor + '22',
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
     }}>
-      <View style={{ position: 'absolute', left: 0, width: '30%', height: '100%', backgroundColor: cor + '22' }} />
-      <View style={{ position: 'absolute', right: 0, width: '30%', height: '100%', backgroundColor: cor + '22' }} />
+      <View style={{ position: 'absolute', left: 0, width: '20%', height: '100%', backgroundColor: cor + '15' }} />
+      <View style={{ position: 'absolute', right: 0, width: '20%', height: '100%', backgroundColor: cor + '15' }} />
       
-      <Text style={{ color: cor, fontWeight: '900', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', opacity: 0.9 }}>
+      <Text style={{ color: cor, fontWeight: '900', fontSize: 9, letterSpacing: 3, textTransform: 'uppercase', opacity: 0.7 }}>
         {isSecreto ? '✧ GUARDIÃO LENDÁRIO ✧' : `✦ MESTRE DE ${pet.tipo} ✦`}
       </Text>
     </View>
@@ -3400,13 +3401,16 @@ O relatório será salvo no app.`;
       <View style={s.header}>
         <TouchableOpacity style={s.headerLeft} onPress={() => setAbaAtiva('perfil')}>
           <View style={{ position: 'relative', width: 44, height: 44 }}>
-            {(() => {
-              const moldura = molduraEquipada ? getMolduraById(molduraEquipada) : null;
-              const corBorda = moldura ? (moldura.cor !== 'rainbow' ? moldura.cor : '#ffaa44') : tema.primary;
-              return fotoAtual
-                ? <Image source={{ uri: fotoAtual }} style={[s.avatarHeader, { borderWidth: 2, borderColor: corBorda }]} />
-                : <View style={[s.avatarVazio, { borderWidth: 2, borderColor: corBorda }]}><Text>👤</Text></View>;
-            })()}
+            <View style={{ position: 'relative', width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+              {pet && <PetOrbital pet={pet} tamanho={44} />}
+              {(() => {
+                const moldura = molduraEquipada ? getMolduraById(molduraEquipada) : null;
+                const corBorda = moldura ? (moldura.cor !== 'rainbow' ? moldura.cor : '#ffaa44') : tema.primary;
+                return fotoAtual
+                  ? <Image source={{ uri: fotoAtual }} style={[s.avatarHeader, { borderWidth: 2, borderColor: corBorda, zIndex: 1 }]} />
+                  : <View style={[s.avatarVazio, { borderWidth: 2, borderColor: corBorda, zIndex: 1 }]}><Text>👤</Text></View>;
+              })()}
+            </View>
             {seloEquipado && (
               <View style={{ position: 'absolute', bottom: -4, right: -4, backgroundColor: '#000a', borderRadius: 10, padding: 1 }}>
                 <Text style={{ fontSize: 12 }}>{getSeloById(seloEquipado)?.emoji || '✨'}</Text>
@@ -3731,8 +3735,8 @@ O relatório será salvo no app.`;
                 const corBorda = moldura ? (moldura.cor !== 'rainbow' ? moldura.cor : '#ffaa44') : tema.primary;
                 const larguraBorda = moldura ? 5 : 3;
                 return fotoAtual
-                  ? <Image source={{ uri: fotoAtual }} style={[s.fotoPerfil, { borderColor: corBorda, borderWidth: larguraBorda }]} />
-                  : <View style={[s.fotoPerfilVazio, { borderColor: corBorda, borderWidth: larguraBorda }]}><Text style={{ fontSize: 40 }}>📷</Text></View>;
+                  ? <Image source={{ uri: fotoAtual }} style={[s.fotoPerfil, { borderColor: corBorda, borderWidth: larguraBorda, zIndex: 1 }]} />
+                  : <View style={[s.fotoPerfilVazio, { borderColor: corBorda, borderWidth: larguraBorda, zIndex: 1 }]}><Text style={{ fontSize: 40 }}>📷</Text></View>;
               })()}
               {seloEquipado && (
                 <View style={{ position: 'absolute', bottom: 0, right: 0, backgroundColor: '#000a', borderRadius: 14, padding: 3 }}>
