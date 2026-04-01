@@ -1,6 +1,6 @@
 // ============================================================
 // DuoTrack — App.js
-// Versão: alpha 0.0.23
+// Versão: alpha 0.0.26
 // ============================================================
 //
 // ════════════════════════════════════════════════════════════
@@ -130,6 +130,13 @@
 //   alpha 0.0.2 — ConsistencyCircle compacto (80px), não ocupa tela
 //   alpha 0.0.3 — documentação completa no código
 //   alpha 0.0.23 — login/cadastro navega direto, sem tela pair, sem horário fixo
+//   alpha 0.0.25 — 8 bugs corrigidos + papel do homem + escudo streak + apoio diário
+//   alpha 0.0.26 — título só abaixo do nome (removido header/configs); conquista
+//                  criar_conta dada no cadastro; calendário: qualquer mulher clica e
+//                  marca vermelho; gerar código sem precisar ter casal; horário
+//                  editável por teclado além das setas; início da cartela liberado
+//                  para qualquer mulher (sem precisar ser admin); ranking global
+//                  filtra só contas ativas (casalId ou streak > 0)
 //
 // ============================================================
 
@@ -153,6 +160,7 @@ import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
   signOut, onAuthStateChanged, updateProfile
 } from 'firebase/auth';
+import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDd7KKg2c7DEnlGADbUApV3bMsRvmjV_ro",
@@ -175,7 +183,7 @@ try {
   console.error("Firebase Init Error:", e);
 }
 
-const VERSAO_ATUAL  = "alpha 0.0.23";
+const VERSAO_ATUAL  = "alpha 0.0.26";
 const ADMIN_EMAIL   = "Harlleyduarte@gmail.com";
 const JANELA_TOLERANCIA_MIN = 10; // janela de ouro = horário definido ± 10 min
 const { width: SW } = Dimensions.get('window');
@@ -635,11 +643,17 @@ export default function App() {
   const [modalGenero, setModalGenero] = useState(false);
   const [modalHorario, setModalHorario] = useState(false);
   const [horarioInput, setHorarioInput] = useState('');
+  const [horarioHH, setHorarioHH] = useState('20');
+  const [horarioMM, setHorarioMM] = useState('30');
   const [modalConectar, setModalConectar] = useState(false);
   const [modalRelatorio, setModalRelatorio] = useState(false);
   const [relatorioAtual, setRelatorioAtual] = useState(null);
   const [historicoRelatorios, setHistoricoRelatorios] = useState([]);
   const [fcmToken, setFcmToken] = useState(null);
+
+  // Estados para papel do homem
+  const [escudosDisponiveis, setEscudosDisponiveis] = useState(2);
+  const [ultimoApoio, setUltimoApoio] = useState(null); // data "YYYY-MM-DD" do último apoio
 
   const fadeAmor = useRef(new Animated.Value(0)).current;
   const pulseBtn = useRef(new Animated.Value(1)).current;
@@ -844,9 +858,15 @@ export default function App() {
       if (!snap.exists()) { setTela('auth'); return; }
       const p = snap.val();
       setPerfil({ ...p, uid });
+      // Restaura foto salva no perfil do usuário
+      if (p.fotoPerfil) {
+        setFotos(prev => ({ ...prev, [uid]: p.fotoPerfil }));
+      }
       setAntrix(p.antrix || 0);
       setIndPontos(p.indPontos || 0);
       setStreak(p.streak || 0);
+      setEscudosDisponiveis(p.escudosDisponiveis !== undefined ? p.escudosDisponiveis : 2);
+      setUltimoApoio(p.ultimoApoio || null);
       let itens = p.itensComprados || { temas: [], selos: [], molduras: [] };
       if (!itens.temas) itens.temas = [];
       if (!itens.selos) itens.selos = [];
@@ -873,12 +893,25 @@ export default function App() {
         setTimeout(() => registrarFcmToken(), 1500);
       } else {
         setTela('app');
+        carregarMuralPessoal(uid);
       }
     } catch(e) { setTela('auth'); }
   }
 
-  async function carregarMural(cid) {
+  function carregarMural(cid) {
     const muralRef = ref(db, `casais/${cid}/mural`);
+    const q = query(muralRef, orderByChild('timestamp'), limitToLast(50));
+    onValue(q, (snap) => {
+      const msgs = [];
+      snap.forEach(child => { msgs.push({ id: child.key, ...child.val() }); });
+      const agora = Date.now();
+      const filtradas = msgs.filter(m => (agora - m.timestamp) < 24 * 60 * 60 * 1000);
+      setMensagensMural(filtradas.reverse());
+    });
+  }
+
+  function carregarMuralPessoal(uid) {
+    const muralRef = ref(db, `usuarios/${uid}/mural`);
     const q = query(muralRef, orderByChild('timestamp'), limitToLast(50));
     onValue(q, (snap) => {
       const msgs = [];
@@ -1137,7 +1170,18 @@ export default function App() {
           loginStreak: 0, diasSemErroHorario: 0, antrixSemGastar: 0,
         }
       });
-    setAuthUser(cred.user); await carregarPerfil(cred.user.uid);
+    setAuthUser(cred.user);
+    // Dar conquista boas_vindas automaticamente
+    try {
+      const conquBV = { desbloqueada: true, data: new Date().toISOString() };
+      await update(ref(db, `usuarios/${cred.user.uid}/conquistas/boas_vindas`), conquBV);
+    } catch(e2) {}
+    // alpha 0.0.26: dar conquista criar_conta também no cadastro
+    try {
+      const conquCC = { desbloqueada: true, data: new Date().toISOString() };
+      await update(ref(db, `usuarios/${cred.user.uid}/conquistas/criar_conta`), conquCC);
+    } catch(e3) {}
+    await carregarPerfil(cred.user.uid);
     } catch(e) {
       let msg = 'Erro no cadastro.';
       if (e.code === 'auth/email-already-in-use') msg = 'Este email já está em uso.';
@@ -1146,6 +1190,54 @@ export default function App() {
       setAuthErro(msg);
     }
     setAuthLoading(false);
+  }
+
+  // ── PAPEL DO HOMEM: Apoio diário ─────────────────────────────────────────────
+  async function enviarApoioDiario() {
+    if (ultimoApoio === hoje) { Alert.alert('💜', 'Você já apoiou hoje!'); return; }
+    if (!casalId) { Alert.alert('Conecte-se', 'Paire com sua parceira primeiro.'); return; }
+    try {
+      // Registra apoio no Firebase
+      await push(ref(db, `casais/${casalId}/apoios`), {
+        uid: authUser.uid,
+        nome: perfil?.nome,
+        data: hoje,
+        timestamp: Date.now(),
+      });
+      // Bônus de Antrix por apoio
+      const bonus = 3;
+      const novoAntrix = antrix + bonus;
+      await update(ref(db, `usuarios/${authUser.uid}`), { antrix: novoAntrix, ultimoApoio: hoje });
+      setAntrix(novoAntrix);
+      setUltimoApoio(hoje);
+      Alert.alert('💜 Apoio enviado!', `Sua parceira foi notificada!\n+${bonus} Antrix para você.`);
+    } catch(e) { Alert.alert('Erro', 'Falha ao enviar apoio.'); }
+  }
+
+  // ── PAPEL DO HOMEM: Usar escudo para proteger streak dela ────────────────────
+  async function usarEscudoStreak() {
+    if (escudosDisponiveis <= 0) {
+      Alert.alert('Sem escudos', 'Você não tem escudos disponíveis.\nGanhe mais completando missões.');
+      return;
+    }
+    if (!casalId) { Alert.alert('Conecte-se', 'Paire com sua parceira primeiro.'); return; }
+    Alert.alert(
+      '🛡️ Usar Escudo?',
+      `Você tem ${escudosDisponiveis} escudo(s). Usar 1 escudo protegerá o streak da sua parceira por hoje.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Usar Escudo', onPress: async () => {
+          try {
+            const novosEscudos = escudosDisponiveis - 1;
+            await update(ref(db, `usuarios/${authUser.uid}`), { escudosDisponiveis: novosEscudos });
+            // Marca escudo ativo no casal
+            await set(ref(db, `casais/${casalId}/escudoAtivo`), { data: hoje, usadoPor: authUser.uid, uid: authUser.uid });
+            setEscudosDisponiveis(novosEscudos);
+            Alert.alert('🛡️ Escudo ativado!', 'O streak dela está protegido hoje!');
+          } catch(e) { Alert.alert('Erro', 'Falha ao usar escudo.'); }
+        }}
+      ]
+    );
   }
 
   async function fazerLogout() {
@@ -1175,34 +1267,70 @@ export default function App() {
     try {
       const snap = await get(ref(db, `pairCodes/${code}`));
       if (snap.exists()) {
-        const { casalId: cid } = snap.val();
-        // alpha 0.0.18: máximo 2 membros por dupla
-        const membrosSnap = await get(ref(db, `casais/${cid}/membros`));
-        const membrosAtuais = membrosSnap.exists() ? Object.keys(membrosSnap.val()) : [];
-        if (membrosAtuais.length >= 2 && !membrosAtuais.includes(authUser.uid)) {
-          Alert.alert('Dupla cheia', 'Esta dupla já tem 2 membros. Cada dupla aceita no máximo 2 pessoas.');
+        const dados = snap.val();
+        let cid = dados.casalId;
+
+        // alpha 0.0.26: código pode ter sido gerado sem casal (só geradoPor)
+        if (!cid && dados.geradoPor) {
+          const uidCriador = dados.geradoPor;
+          // Cria o casal agora com os dois membros
+          cid = `casal_${Date.now()}`;
+          const snapCriador = await get(ref(db, `usuarios/${uidCriador}`));
+          const nomeCriador = snapCriador.exists() ? (snapCriador.val().nome || dados.nomeCriador || 'Usuário') : (dados.nomeCriador || 'Usuário');
+          await set(ref(db, `casais/${cid}`), {
+            criadoEm: new Date().toISOString(),
+            membros: { [uidCriador]: nomeCriador, [authUser.uid]: perfil?.nome || 'Usuário' }
+          });
+          // Liga o casal nos dois perfis
+          await set(ref(db, `usuarios/${uidCriador}/casalId`), cid);
+          await set(ref(db, `usuarios/${authUser.uid}/casalId`), cid);
+          // Se o criador for mulher com horário, copia pro casal
+          if (snapCriador.exists()) {
+            const pc = snapCriador.val();
+            if (pc.genero === 'mulher' && pc.horarioPessoal) {
+              await update(ref(db, `casais/${cid}/config/horariosNotificacao`), { [uidCriador]: pc.horarioPessoal });
+            }
+          }
+        } else if (cid) {
+          // Fluxo normal: casal já existe
+          const membrosSnap = await get(ref(db, `casais/${cid}/membros`));
+          const membrosAtuais = membrosSnap.exists() ? Object.keys(membrosSnap.val()) : [];
+          if (membrosAtuais.length >= 2 && !membrosAtuais.includes(authUser.uid)) {
+            Alert.alert('Dupla cheia', 'Esta dupla já tem 2 membros. Cada dupla aceita no máximo 2 pessoas.');
+            setPairLoading(false); return;
+          }
+          await set(ref(db, `casais/${cid}/membros/${authUser.uid}`), perfil.nome);
+          await set(ref(db, `usuarios/${authUser.uid}/casalId`), cid);
+        } else {
+          Alert.alert('Erro', 'Código inválido.');
           setPairLoading(false); return;
         }
-        await set(ref(db, `casais/${cid}/membros/${authUser.uid}`), perfil.nome);
-        await set(ref(db, `usuarios/${authUser.uid}/casalId`), cid);
+
         await remove(ref(db, `pairCodes/${code}`));
         // Se for mulher com horário salvo, copia para o casal agora
-        if (perfil?.genero === 'mulher' && perfil?.horarioPessoal) {
+        if (perfil?.genero === 'mulher' && perfil?.horarioPessoal && cid) {
           await update(ref(db, `casais/${cid}/config/horariosNotificacao`), { [authUser.uid]: perfil.horarioPessoal });
         }
         setCasalId(cid); setTela('app'); setModalConectar(false);
       } else { Alert.alert('Erro', 'Chave não encontrada.'); }
+
     } catch(e) { Alert.alert('Erro', 'Falha ao entrar na dupla.'); }
     setPairLoading(false);
   }
 
   async function gerarCodigoConvite() {
-    if (!casalId) { Alert.alert('Erro', 'Você não está em uma dupla.'); return; }
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let chave = '';
     for (let i = 0; i < 6; i++) chave += chars[Math.floor(Math.random() * chars.length)];
     try {
-      await set(ref(db, `pairCodes/${chave}`), { casalId });
+      // alpha 0.0.26: gera código sem criar casal automaticamente.
+      // Se já tem casal, vincula ao casal existente. Se não tem, salva só o uid
+      // para que quando a parceira entrar com o código, ela crie o casal e adicione os dois.
+      if (casalId) {
+        await set(ref(db, `pairCodes/${chave}`), { casalId });
+      } else {
+        await set(ref(db, `pairCodes/${chave}`), { geradoPor: authUser.uid, nomeCriador: perfil?.nome || 'Usuário' });
+      }
       setCodigoGerado(chave);
     } catch(e) { Alert.alert('Erro', 'Falha ao gerar código.'); }
   }
@@ -1235,8 +1363,8 @@ export default function App() {
   // 2. Se pareada, copia para /casais/{cid}/config/horariosNotificacao/{uid}
   //    → parceiro(s) recebem notificação no mesmo horário automaticamente
   // ─────────────────────────────────────────────────────────────────────────────
-  async function salvarHorarioPessoal() {
-    const horario = horarioInput.trim();
+  async function salvarHorarioPessoal(horarioOverride) {
+    const horario = (horarioOverride || horarioInput).trim();
     if (!/^\d{2}:\d{2}$/.test(horario)) { Alert.alert('Formato inválido', 'Use HH:MM — ex: 21:00'); return; }
     try {
       // 1. Salva no perfil do usuário
@@ -1471,54 +1599,59 @@ export default function App() {
   }
 
   async function adminToggleDia(key) {
-    if (!isAdmin) return;
+    // alpha 0.0.26: mulher pode marcar/desmarcar dias no próprio calendário sem ser admin
+    // Admin tem o toggle completo (com estorno de recompensas)
+    if (!isAdmin && !ehMulher) return; // homem sem admin não faz nada
+    if (!casalId) return;
+
     try {
       if (historico[key]) {
-        const entrada = historico[key];
-        // Só estorna se foi marcado como tomado (não faltas automáticas)
-        if (entrada.tomou && !entrada.faltaAutomatica) {
-          const uidMarcou = entrada.quemMarcou;
-          if (uidMarcou) {
-            // Recalcula recompensa que foi dada naquele dia
-            // Usa streak=1 como base conservadora para estorno (não temos o streak exato do dia)
-            const { pontosGanhos, antrixGanho } = calcularRecompensa(1);
-            // Busca dados atuais do usuário que marcou
-            const snapUser = await get(ref(db, `usuarios/${uidMarcou}`));
-            if (snapUser.exists()) {
-              const dadosUser = snapUser.val();
-              const novoIndPontos = Math.max(0, (dadosUser.indPontos || 0) - pontosGanhos);
-              const novoAntrix    = Math.max(0, (dadosUser.antrix    || 0) - antrixGanho);
-              const novoStreak    = Math.max(0, (dadosUser.streak    || 0) - 1);
-              await update(ref(db, `usuarios/${uidMarcou}`), {
-                indPontos: novoIndPontos,
-                antrix:    novoAntrix,
-                streak:    novoStreak,
-              });
-              // Atualiza estado local se for o próprio usuário logado
-              if (uidMarcou === authUser?.uid) {
-                setIndPontos(novoIndPontos);
-                setAntrix(novoAntrix);
-                setStreak(novoStreak);
+        // Desmarcar
+        if (isAdmin) {
+          const entrada = historico[key];
+          // Só estorna se foi marcado como tomado (não faltas automáticas)
+          if (entrada.tomou && !entrada.faltaAutomatica) {
+            const uidMarcou = entrada.quemMarcou;
+            if (uidMarcou) {
+              const { pontosGanhos, antrixGanho } = calcularRecompensa(1);
+              const snapUser = await get(ref(db, `usuarios/${uidMarcou}`));
+              if (snapUser.exists()) {
+                const dadosUser = snapUser.val();
+                const novoIndPontos = Math.max(0, (dadosUser.indPontos || 0) - pontosGanhos);
+                const novoAntrix    = Math.max(0, (dadosUser.antrix    || 0) - antrixGanho);
+                const novoStreak    = Math.max(0, (dadosUser.streak    || 0) - 1);
+                await update(ref(db, `usuarios/${uidMarcou}`), { indPontos: novoIndPontos, antrix: novoAntrix, streak: novoStreak });
+                if (uidMarcou === authUser?.uid) { setIndPontos(novoIndPontos); setAntrix(novoAntrix); setStreak(novoStreak); }
+              }
+              const npAtual = { ...pontos };
+              const uidMulher = Object.keys(casalConfig?.horariosNotificacao || {})[0];
+              const uidPonto = entrada.naJanelaOuro ? (uidMulher || uidMarcou) : uidMarcou;
+              if (npAtual[uidPonto] > 0) {
+                npAtual[uidPonto] = (npAtual[uidPonto] || 1) - 1;
+                await set(ref(db, `casais/${casalId}/pontos`), npAtual);
               }
             }
-            // Estorna ponto do casal
-            const npAtual = { ...pontos };
-            const uidMulher = Object.keys(casalConfig?.horariosNotificacao || {})[0];
-            const uidPonto = entrada.naJanelaOuro ? (uidMulher || uidMarcou) : uidMarcou;
-            if (npAtual[uidPonto] > 0) {
-              npAtual[uidPonto] = (npAtual[uidPonto] || 1) - 1;
-              await set(ref(db, `casais/${casalId}/pontos`), npAtual);
-            }
           }
+          await remove(ref(db, `casais/${casalId}/historico/${key}`));
+          Alert.alert('Admin', `Dia ${key} desmarcado e recompensas revertidas.`);
+        } else {
+          // Mulher comum: só desmarca visualmente, sem estorno
+          await remove(ref(db, `casais/${casalId}/historico/${key}`));
         }
-        await remove(ref(db, `casais/${casalId}/historico/${key}`));
-        Alert.alert('Admin', `Dia ${key} desmarcado e recompensas revertidas.`);
       } else {
-        // Marca manualmente sem dar recompensa (só histórico visual)
-        await set(ref(db, `casais/${casalId}/historico/${key}`), {
-          data: key, hora: '--:--', tomou: true, quemMarcou: null,
-          noHorarioCerto: false, naJanelaOuro: false, adminManual: true,
-        });
+        // Marcar o dia
+        if (isAdmin) {
+          await set(ref(db, `casais/${casalId}/historico/${key}`), {
+            data: key, hora: '--:--', tomou: true, quemMarcou: null,
+            noHorarioCerto: false, naJanelaOuro: false, adminManual: true,
+          });
+        } else {
+          // Mulher comum: marca como tomado sem recompensa extra (só visual)
+          await set(ref(db, `casais/${casalId}/historico/${key}`), {
+            data: key, hora: '--:--', tomou: true, quemMarcou: authUser.uid,
+            noHorarioCerto: false, naJanelaOuro: false, manualMulher: true,
+          });
+        }
       }
     } catch(e) { Alert.alert('Erro', 'Falha ao alterar dia.'); }
   }
@@ -1635,9 +1768,18 @@ O relatório será salvo no app.`;
 
   async function enviarMensagem() {
     if (!novaMensagem.trim()) return;
+    // Se não tem casal, salva em mural pessoal do usuário
+    const muralPath = casalId
+      ? `casais/${casalId}/mural`
+      : `usuarios/${authUser.uid}/mural`;
     try {
-      const msgRef = push(ref(db, `casais/${casalId}/mural`));
-      await set(msgRef, { texto: novaMensagem.trim(), usuario: perfil?.nome, timestamp: Date.now() });
+      const msgRef = push(ref(db, muralPath));
+      await set(msgRef, {
+        texto: novaMensagem.trim(),
+        usuario: perfil?.nome,
+        uid: authUser.uid,
+        timestamp: Date.now()
+      });
       setNovaMensagem('');
     } catch(e) { Alert.alert('Erro', 'Falha ao enviar mensagem.'); }
   }
@@ -1664,8 +1806,11 @@ O relatório será salvo no app.`;
       const snapshot = await get(ref(db, 'usuarios'));
       if (snapshot.exists()) {
         const data = snapshot.val();
-        // alpha 0.0.18: ranking global expõe APENAS nome + pontos — sem email, casalId, streak, antrix
-        let lista = Object.values(data).map(u => ({ nome: u.nome || '???', pontos: u.indPontos || 0 }));
+        // alpha 0.0.26: filtra contas ativas — precisa ter casalId OU streak > 0
+        // Remove contas fantasma/teste que nunca usaram o app de verdade
+        let lista = Object.values(data)
+          .filter(u => (u.indPontos || 0) > 0 && (u.casalId || (u.streak || 0) > 0))
+          .map(u => ({ nome: u.nome || '???', pontos: u.indPontos || 0 }));
         lista.sort((a, b) => b.pontos - a.pontos);
         setGlobalRanking(lista);
       } else { setGlobalRanking([]); }
@@ -1696,13 +1841,34 @@ O relatório será salvo no app.`;
     if (status !== 'granted') { Alert.alert('Permissão negada'); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true, aspect: [1, 1], quality: 0.8,
+      allowsEditing: true, aspect: [1, 1], quality: 0.7,
     });
     if (!result.canceled && result.assets[0].uri) {
       const uri = result.assets[0].uri;
-      await set(ref(db, `casais/${casalId}/fotos/${authUser.uid}`), uri);
-      setFotos(prev => ({ ...prev, [authUser.uid]: uri }));
-      Alert.alert('Foto atualizada!');
+      try {
+        // alpha 0.0.26: faz upload para Firebase Storage e salva URL permanente
+        // URI local some quando o app fecha — URL do Storage persiste sempre
+        const storage = getStorage();
+        const resp = await fetch(uri);
+        const blob = await resp.blob();
+        const storageRef = sRef(storage, `fotos/${authUser.uid}/perfil.jpg`);
+        await uploadBytes(storageRef, blob);
+        const downloadURL = await getDownloadURL(storageRef);
+        // Salva URL permanente no perfil do usuário
+        await update(ref(db, `usuarios/${authUser.uid}`), { fotoPerfil: downloadURL });
+        // Salva também no casal se pareado
+        if (casalId) {
+          await set(ref(db, `casais/${casalId}/fotos/${authUser.uid}`), downloadURL);
+        }
+        setFotos(prev => ({ ...prev, [authUser.uid]: downloadURL }));
+        Alert.alert('✅ Foto atualizada!');
+      } catch(e) {
+        // Fallback: salva URI local se upload falhar (comportamento anterior)
+        await update(ref(db, `usuarios/${authUser.uid}`), { fotoPerfil: uri });
+        if (casalId) await set(ref(db, `casais/${casalId}/fotos/${authUser.uid}`), uri);
+        setFotos(prev => ({ ...prev, [authUser.uid]: uri }));
+        Alert.alert('⚠️ Foto salva localmente', 'Upload falhou. A foto pode sumir ao fechar o app.');
+      }
     }
   }
 
@@ -1922,7 +2088,11 @@ O relatório será salvo no app.`;
                 )}
                 <Text style={[s.perfilNome, { marginTop: 8 }]}>{perfilUsuarioVisto.nome}</Text>
                 {perfilUsuarioVisto.titulo && (
-                  <Text style={{ fontSize: 13, color: perfilUsuarioVisto.titulo.cor || tema.primary, marginTop: 4 }}>{perfilUsuarioVisto.titulo.titulo}</Text>
+                  <View style={{ alignItems: 'center', marginTop: 4 }}>
+                    <View style={{ borderWidth: 1, borderColor: '#fff', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 2 }}>
+                      <Text style={{ fontSize: 12, color: perfilUsuarioVisto.titulo.cor || '#fff', fontWeight: '700' }}>{perfilUsuarioVisto.titulo.titulo}</Text>
+                    </View>
+                  </View>
                 )}
                 {perfilUsuarioVisto.moldura && (
                   <Text style={{ color: tema.sub, fontSize: 12, marginTop: 4 }}>🖼️ {[...ITENS_LOJA.molduras.comum, ...ITENS_LOJA.molduras.raro, ...ITENS_LOJA.molduras.lendario].find(m => m.id === perfilUsuarioVisto.moldura)?.nome || 'Moldura'}</Text>
@@ -2150,13 +2320,78 @@ O relatório será salvo no app.`;
         </View></View>
       </Modal>
 
-      {/* Modal Horário */}
+      {/* Modal Horário — Picker */}
       <Modal transparent visible={modalHorario} animationType="slide">
         <View style={s.modalWrap}><View style={s.modalCard}>
-          <Text style={s.modalTitulo}>⏰ Horário pessoal</Text>
-          <TextInput style={s.input} placeholder="HH:MM — ex: 21:00" placeholderTextColor="#555" value={horarioInput} onChangeText={setHorarioInput} keyboardType="numeric" maxLength={5} />
-          <TouchableOpacity style={s.btnPrimary} onPress={salvarHorarioPessoal}><Text style={s.btnPrimaryTxt}>✅ Salvar</Text></TouchableOpacity>
-          <TouchableOpacity style={s.btnSecondary} onPress={() => setModalHorario(false)}><Text style={s.btnSecondaryTxt}>Cancelar</Text></TouchableOpacity>
+          <Text style={s.modalTitulo}>⏰ Definir horário</Text>
+          <Text style={{ color: tema.sub, fontSize: 13, marginBottom: 20, textAlign: 'center' }}>
+            Janela de Ouro: ±10 min deste horário
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 24 }}>
+            <View style={{ alignItems: 'center' }}>
+              <TouchableOpacity onPress={() => setHorarioHH(h => String((parseInt(h)+1)%24).padStart(2,'0'))} style={{ padding: 12 }}>
+                <Text style={{ color: tema.primary, fontSize: 28, fontWeight: '900' }}>▲</Text>
+              </TouchableOpacity>
+              {/* alpha 0.0.26: TextInput editável direto — toca o número e digita */}
+              <TextInput
+                style={{ color: '#fff', fontSize: 48, fontWeight: '900', width: 80, textAlign: 'center', padding: 0 }}
+                value={horarioHH}
+                onChangeText={v => {
+                  const num = v.replace(/\D/g, '').slice(0, 2);
+                  setHorarioHH(num);
+                }}
+                onBlur={() => {
+                  const n = parseInt(horarioHH) || 0;
+                  setHorarioHH(String(Math.min(23, n)).padStart(2, '0'));
+                }}
+                keyboardType="number-pad"
+                maxLength={2}
+                selectTextOnFocus
+              />
+              <TouchableOpacity onPress={() => setHorarioHH(h => String((parseInt(h)-1+24)%24).padStart(2,'0'))} style={{ padding: 12 }}>
+                <Text style={{ color: tema.primary, fontSize: 28, fontWeight: '900' }}>▼</Text>
+              </TouchableOpacity>
+              <Text style={{ color: tema.sub, fontSize: 12 }}>hora</Text>
+            </View>
+            <Text style={{ color: '#fff', fontSize: 48, fontWeight: '900' }}>:</Text>
+            <View style={{ alignItems: 'center' }}>
+              <TouchableOpacity onPress={() => setHorarioMM(m => String((parseInt(m)+5)%60).padStart(2,'0'))} style={{ padding: 12 }}>
+                <Text style={{ color: tema.primary, fontSize: 28, fontWeight: '900' }}>▲</Text>
+              </TouchableOpacity>
+              {/* alpha 0.0.26: TextInput editável direto — toca o número e digita */}
+              <TextInput
+                style={{ color: '#fff', fontSize: 48, fontWeight: '900', width: 80, textAlign: 'center', padding: 0 }}
+                value={horarioMM}
+                onChangeText={v => {
+                  const num = v.replace(/\D/g, '').slice(0, 2);
+                  setHorarioMM(num);
+                }}
+                onBlur={() => {
+                  const n = parseInt(horarioMM) || 0;
+                  setHorarioMM(String(Math.min(59, n)).padStart(2, '0'));
+                }}
+                keyboardType="number-pad"
+                maxLength={2}
+                selectTextOnFocus
+              />
+              <TouchableOpacity onPress={() => setHorarioMM(m => String((parseInt(m)-5+60)%60).padStart(2,'0'))} style={{ padding: 12 }}>
+                <Text style={{ color: tema.primary, fontSize: 28, fontWeight: '900' }}>▼</Text>
+              </TouchableOpacity>
+              <Text style={{ color: tema.sub, fontSize: 12 }}>min</Text>
+            </View>
+          </View>
+          <TouchableOpacity style={s.btnPrimary} onPress={() => {
+            const hhFinal = String(Math.min(23, parseInt(horarioHH) || 0)).padStart(2,'0');
+            const mmFinal = String(Math.min(59, parseInt(horarioMM) || 0)).padStart(2,'0');
+            const h = `${hhFinal}:${mmFinal}`;
+            setHorarioInput(h);
+            salvarHorarioPessoal(h);
+          }}>
+            <Text style={s.btnPrimaryTxt}>✅ Salvar — {horarioHH}:{horarioMM}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.btnSecondary} onPress={() => setModalHorario(false)}>
+            <Text style={s.btnSecondaryTxt}>Cancelar</Text>
+          </TouchableOpacity>
         </View></View>
       </Modal>
 
@@ -2255,9 +2490,6 @@ O relatório será salvo no app.`;
           </View>
           <View style={{ marginLeft: 10 }}>
             <Text style={s.headerTitle}>{nomeAtual}</Text>
-            {tituloEquipado && titulosDesbloqueados[tituloEquipado] && (
-              <Text style={{ fontSize: 10, color: titulosDesbloqueados[tituloEquipado].cor }}>{titulosDesbloqueados[tituloEquipado].titulo}</Text>
-            )}
             <Text style={s.headerSub}>{parceiro ? `💞 ${parceiro.nome}` : 'Sem parceiro(a)'}</Text>
           </View>
         </TouchableOpacity>
@@ -2278,6 +2510,21 @@ O relatório será salvo no app.`;
             <Text style={[s.countdownTxt, naJanela && { color: '#00ff87', fontWeight: '900' }]}>{countdown}</Text>
           </View>
 
+          {/* Mulher sem data de início — pode definir */}
+          {ehMulher && !dataInicio && casalId && (
+            <TouchableOpacity
+              style={{ backgroundColor: '#7b2fff22', borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#7b2fff', flexDirection: 'row', alignItems: 'center' }}
+              onPress={() => setModalInicio(true)}
+            >
+              <Text style={{ fontSize: 20, marginRight: 10 }}>📅</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>Defina a data de início da cartela</Text>
+                <Text style={{ color: tema.sub, fontSize: 11, marginTop: 2 }}>Toque aqui para iniciar o ciclo 💊</Text>
+              </View>
+              <Text style={{ color: '#7b2fff', fontSize: 18 }}>›</Text>
+            </TouchableOpacity>
+          )}
+
           {/* alpha 0.0.15: aviso para mulher sem horário definido */}
           {ehMulher && !meuHorario && (
             <TouchableOpacity
@@ -2293,7 +2540,8 @@ O relatório será salvo no app.`;
             </TouchableOpacity>
           )}
 
-          {pD > 0 ? (
+          {/* HOME MULHER */}
+          {ehMulher && (pD > 0 ? (
             <View style={[s.card, { borderColor: '#ffd60a' }]}>
               <Text style={{ fontSize: 44 }}>⏸️</Text>
               <Text style={[s.cardTitulo, { color: '#ffd60a' }]}>Pausa ativa</Text>
@@ -2327,7 +2575,58 @@ O relatório será salvo no app.`;
                 <Text style={[s.btnSecondaryTxt, { color: '#ff4444' }]}>▶️ Encerrar pausa</Text>
               </TouchableOpacity>
             )}
-          </>}
+          </>)}
+
+          {/* HOME HOMEM */}
+          {!ehMulher && (<>
+            {/* Card status da parceira */}
+            {casalId && parceiro ? (<>
+              <View style={[s.card, { borderColor: tomouHoje ? '#00ff87' : naJanela ? '#00ff87' : tema.primary }]}>
+                <Text style={{ fontSize: 44 }}>{tomouHoje ? '✅' : naJanela ? '🟢' : '⏳'}</Text>
+                <Text style={s.cardTitulo}>{parceiro.nome}</Text>
+                <Text style={s.cardSub}>
+                  {tomouHoje ? 'Tomou hoje! 🎉' : naJanela ? 'Hora da pílula dela!' : 'Ainda não tomou hoje'}
+                </Text>
+                {meuHorario && <Text style={[s.cardSub, { marginTop: 6, color: tema.accent }]}>⏰ Horário dela: {meuHorario}</Text>}
+                <Text style={[s.cardSub, { marginTop: 4 }]}>Dia {diaCartela}/28 · Streak: {(() => { const streakParceiro = Object.values(pontos || {})[0] || 0; return streakParceiro; })()} pts</Text>
+              </View>
+
+              {/* ConsistencyCircle da parceira */}
+              <ConsistencyCircle historico={historico} dataInicio={dataInicio} tema={tema} horario={meuHorario} />
+
+              {/* Apoio diário */}
+              <TouchableOpacity
+                style={[s.btnPrimary, ultimoApoio === hoje && { opacity: 0.5 }]}
+                onPress={enviarApoioDiario}
+                disabled={ultimoApoio === hoje}
+              >
+                <Text style={s.btnPrimaryTxt}>
+                  {ultimoApoio === hoje ? '💜 Apoio enviado hoje' : '💜 Enviar apoio diário (+3 💠)'}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Escudo de streak */}
+              <TouchableOpacity
+                style={[s.btnSecondary, { marginTop: 8, borderColor: escudosDisponiveis > 0 ? '#7b2fff' : '#444' }]}
+                onPress={usarEscudoStreak}
+              >
+                <Text style={[s.btnSecondaryTxt, { color: escudosDisponiveis > 0 ? '#7b2fff' : '#555' }]}>
+                  🛡️ Usar Escudo de Streak ({escudosDisponiveis} disponíveis)
+                </Text>
+              </TouchableOpacity>
+
+            </>) : (
+              /* Homem sem par */
+              <View style={[s.card, { borderColor: tema.border }]}>
+                <Text style={{ fontSize: 48 }}>🔗</Text>
+                <Text style={s.cardTitulo}>Conecte-se</Text>
+                <Text style={s.cardSub}>Paire com sua parceira para ver o status dela aqui</Text>
+                <TouchableOpacity style={[s.btnPrimary, { marginTop: 16, width: '100%' }]} onPress={() => { setCodigoGerado(''); setPairInput(''); setModalConectar(true); }}>
+                  <Text style={s.btnPrimaryTxt}>🔗 Conectar agora</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </>)}
         </>}
 
         {/* CALENDÁRIO */}
@@ -2396,7 +2695,6 @@ O relatório será salvo no app.`;
               }
               <View style={{ flex: 1 }}>
                 <Text style={s.rankNome}>{nomeAtual} {perfil?.genero === 'mulher' ? '👩' : '👨'} <Text style={{ color: tema.sub, fontSize: 11 }}>(você)</Text></Text>
-                {tituloEquipado && titulosDesbloqueados[tituloEquipado] && <Text style={{ fontSize: 11, color: titulosDesbloqueados[tituloEquipado].cor }}>{titulosDesbloqueados[tituloEquipado].titulo}</Text>}
                 <Text style={{ color: tema.sub, fontSize: 11 }}>Streak: {streak} 🔥 · {antrix} 💠</Text>
               </View>
             </View>
@@ -2513,9 +2811,28 @@ O relatório será salvo no app.`;
               )}
             </TouchableOpacity>
             <Text style={s.perfilNome}>{nomeAtual}</Text>
-            {tituloEquipado && titulosDesbloqueados[tituloEquipado] && (
-              <Text style={{ fontSize: 14, color: titulosDesbloqueados[tituloEquipado].cor, marginTop: 4 }}>{titulosDesbloqueados[tituloEquipado].titulo}</Text>
-            )}
+            {/* alpha 0.0.26: título SOMENTE aqui (abaixo do nome), com contorno branco */}
+            {tituloEquipado && titulosDesbloqueados[tituloEquipado] && (() => {
+              const td = titulosDesbloqueados[tituloEquipado];
+              if (tituloEquipado === 'amor_64') {
+                const glowOpacity = tituloGlow.interpolate({ inputRange: [0,1], outputRange: [0.3,1] });
+                const glowScale   = tituloGlow.interpolate({ inputRange: [0,1], outputRange: [0.97,1.03] });
+                return (
+                  <View style={{ alignItems: 'center', marginTop: 6 }}>
+                    <Animated.View style={{ position:'absolute', width:220, height:36, borderRadius:10, borderWidth:1.5, borderColor:'#fff', opacity:glowOpacity, transform:[{scale:glowScale}], shadowColor:'#fff', shadowOffset:{width:0,height:0}, shadowOpacity:0.8, shadowRadius:10 }} />
+                    <View style={s.tituloSecreto}><Text style={s.tituloSecretoTxt}>{td.titulo}</Text></View>
+                  </View>
+                );
+              }
+              // Título comum: badge com contorno branco abaixo do nome
+              return (
+                <View style={{ alignItems: 'center', marginTop: 6 }}>
+                  <View style={{ borderWidth: 1, borderColor: '#fff', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 3 }}>
+                    <Text style={{ fontSize: 13, color: td.cor || '#fff', fontWeight: '700' }}>{td.titulo}</Text>
+                  </View>
+                </View>
+              );
+            })()}
             {perfil?.genero && <Text style={{ color: tema.sub, fontSize: 13, marginTop: 4 }}>{perfil.genero === 'mulher' ? '👩 Mulher' : perfil.genero === 'homem' ? '👨 Homem' : '⚪ Não informado'}</Text>}
             <View style={s.statsRow}>
               <View style={s.statItem}><Text style={s.statValue}>{indPontos}</Text><Text style={s.statLabel}>Pontos</Text></View>
@@ -2545,29 +2862,7 @@ O relatório será salvo no app.`;
             </TouchableOpacity>
           </View>
 
-          {/* Título secreto — "Aquele Que Ama Mais" */}
-          {tituloEquipado === 'amor_64' && titulosDesbloqueados['amor_64'] && (() => {
-            const glowOpacity = tituloGlow.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] });
-            const glowScale   = tituloGlow.interpolate({ inputRange: [0, 1], outputRange: [0.97, 1.03] });
-            return (
-              <View style={{ alignItems: 'center', marginVertical: 16 }}>
-                {/* Camada de brilho externo */}
-                <Animated.View style={{
-                  position: 'absolute', width: 240, height: 52,
-                  borderRadius: 14, borderWidth: 1.5,
-                  borderColor: '#ffffff',
-                  opacity: glowOpacity,
-                  transform: [{ scale: glowScale }],
-                  shadowColor: '#fff', shadowOffset: { width: 0, height: 0 },
-                  shadowOpacity: 0.8, shadowRadius: 12,
-                }} />
-                {/* Título */}
-                <View style={s.tituloSecreto}>
-                  <Text style={s.tituloSecretoTxt}>Aquele Que Ama Mais</Text>
-                </View>
-              </View>
-            );
-          })()}
+
 
           {/* Input secreto oculto — sem label visível */}
           {!conquistasDesbloqueadas['amor_64'] && (
@@ -2583,10 +2878,11 @@ O relatório será salvo no app.`;
           {/* ── SETOR: Configurações ── */}
           <Text style={s.setorTitulo}>⚙️ Configurações</Text>
           <View style={s.setorGrid}>
+            {/* Botão horário — só mulher */}
             <TouchableOpacity
               style={[s.setorBtn, !ehMulher && { opacity: 0.5 }]}
               onPress={() => {
-                if (!ehMulher) return; // homem não abre modal
+                if (!ehMulher) return;
                 setHorarioInput(meuHorario || '');
                 setModalHorario(true);
               }}
@@ -2598,6 +2894,17 @@ O relatório será salvo no app.`;
                   : (meuHorario ? meuHorario : '—')
                 }
               </Text>
+            </TouchableOpacity>
+            {/* alpha 0.0.26: Início cartela liberado para qualquer mulher (não só admin) */}
+            <TouchableOpacity
+              style={[s.setorBtn, !ehMulher && { opacity: 0.5 }]}
+              onPress={() => {
+                if (!ehMulher) return;
+                setModalInicio(true);
+              }}
+            >
+              <Text style={s.setorBtnIcon}>📅</Text>
+              <Text style={s.setorBtnLabel}>{dataInicio ? 'Cartela' : 'Início cartela'}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.setorBtn} onPress={() => setModalGenero(true)}>
               <Text style={s.setorBtnIcon}>👤</Text>
