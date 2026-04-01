@@ -1,6 +1,6 @@
 // ============================================================
 // DuoTrack — App.js
-// Versão: alpha 0.0.42
+// Versão: alpha 0.0.43
 // ============================================================
 //
 // ════════════════════════════════════════════════════════════
@@ -260,7 +260,11 @@
 //   alpha 0.0.27 — dossiê atualizado para v4.0 com todas as regras,
 //                  livro negro e fluxo OTA documentados no código
 //
-//   alpha 0.0.28 — marcar pílula, calendário e data de início funcionam sem casal
+//   alpha 0.0.43 — OTA resolve redirect GitHub (download funciona), modal conectar
+//                  com status visual para ambos + copiar código, conquistas boas_vindas
+//                  e criar_conta garantidas no cadastro, mural campo autor corrigido,
+//                  foto sem fallback URI local, loja com botão fechar no topo,
+//                  notificações mostram modal interno quando app está aberto
 //   alpha 0.0.29 — migração solo→casal automática ao parear
 //   alpha 0.0.30 — sistema de pet completo (10 fases, caixas, exploração,
 //   alpha 0.0.31 — correção de SyntaxError na string do easter egg Pet Sombrio
@@ -313,7 +317,7 @@ try {
   console.error("Firebase Init Error:", e);
 }
 
-const VERSAO_ATUAL  = "alpha 0.0.42";
+const VERSAO_ATUAL  = "alpha 0.0.43";
 const ADMIN_EMAIL   = "Harlleyduarte@gmail.com";
 
 // ── Sistema de Pet ──────────────────────────────────────────────
@@ -1047,8 +1051,19 @@ export default function App() {
   const petOrbit = useRef(new Animated.Value(0)).current;
   const petScale = useRef(new Animated.Value(1)).current;
 
-  const fadeAmor = useRef(new Animated.Value(0)).current;
-  const pulseBtn = useRef(new Animated.Value(1)).current;
+  // ── Notificação recebida com app aberto → mostra modal interno ──────────────
+  const [notifModal, setNotifModal] = useState(false);
+  const [notifInfo, setNotifInfo] = useState({ title: '', body: '' });
+  useEffect(() => {
+    const sub = Notifications.addNotificationReceivedListener(notif => {
+      const title = notif.request.content.title || '';
+      const body  = notif.request.content.body  || '';
+      setNotifInfo({ title, body });
+      setNotifModal(true);
+      setTimeout(() => setNotifModal(false), 5000);
+    });
+    return () => sub.remove();
+  }, []);
   const [modalPerfilUsuario, setModalPerfilUsuario] = useState(false);
   const [perfilUsuarioVisto, setPerfilUsuarioVisto] = useState(null);
   const [confete, setConfete] = useState(false);
@@ -1619,6 +1634,7 @@ export default function App() {
       await updateProfile(cred.user, { displayName: authNome.trim() });
       const isHarlley = authEmail.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
       const conquistaBoasVindas = { desbloqueada: true, data: new Date().toISOString() };
+      const conquistaCriarConta = { desbloqueada: true, data: new Date().toISOString() };
       await set(ref(db, `usuarios/${cred.user.uid}`), {
         nome: authNome.trim(), email: authEmail.trim().toLowerCase(),
         isAdmin: isHarlley, casalId: null, genero: null,
@@ -1627,7 +1643,10 @@ export default function App() {
         itensComprados: { temas: [], selos: [], molduras: [] },
         seloEquipado: null, molduraEquipada: null,
         titulosDesbloqueados: {}, tituloEquipado: null,
-        conquistas: { boas_vindas: conquistaBoasVindas },
+        conquistas: {
+          boas_vindas: conquistaBoasVindas,
+          criar_conta: conquistaCriarConta,
+        },
         estatisticas: {
           rankPrimeiro: 0, rankPrimeiroConsecutivo: 0, antrixTotal: 0,
           totalTemasComprados: 0, totalTemasRarosComprados: 0, totalTemasLendariosComprados: 0,
@@ -1637,16 +1656,8 @@ export default function App() {
         }
       });
     setAuthUser(cred.user);
-    // Dar conquista boas_vindas automaticamente
-    try {
-      const conquBV = { desbloqueada: true, data: new Date().toISOString() };
-      await update(ref(db, `usuarios/${cred.user.uid}/conquistas/boas_vindas`), conquBV);
-    } catch(e2) {}
-    // alpha 0.0.27: dar conquista criar_conta também no cadastro
-    try {
-      const conquCC = { desbloqueada: true, data: new Date().toISOString() };
-      await update(ref(db, `usuarios/${cred.user.uid}/conquistas/criar_conta`), conquCC);
-    } catch(e3) {}
+    // Conquistas já gravadas no set() acima — só atualiza estado local
+    setConquistasDesbloqueadas({ boas_vindas: conquistaBoasVindas, criar_conta: conquistaCriarConta });
     await carregarPerfil(cred.user.uid);
     } catch(e) {
       let msg = 'Erro no cadastro.';
@@ -2584,7 +2595,6 @@ O relatório será salvo no app.`;
 
   async function enviarMensagem() {
     if (!novaMensagem.trim()) return;
-    // Se não tem casal, salva em mural pessoal do usuário
     const muralPath = casalId
       ? `casais/${casalId}/mural`
       : `usuarios/${authUser.uid}/mural`;
@@ -2592,12 +2602,13 @@ O relatório será salvo no app.`;
       const msgRef = push(ref(db, muralPath));
       await set(msgRef, {
         texto: novaMensagem.trim(),
-        usuario: perfil?.nome,
+        autor: perfil?.nome || 'Você',   // ← fix: campo autor que o render usa
+        usuario: perfil?.nome || 'Você',
         uid: authUser.uid,
         timestamp: Date.now()
       });
       setNovaMensagem('');
-    } catch(e) { Alert.alert('Erro', 'Falha ao enviar mensagem.'); }
+    } catch(e) { Alert.alert('Erro', 'Falha ao enviar mensagem: ' + e.message); }
   }
 
   async function deletarMensagem(msgId) {
@@ -2664,28 +2675,22 @@ O relatório será salvo no app.`;
     if (!result.canceled && result.assets[0].uri) {
       const uri = result.assets[0].uri;
       try {
-        // alpha 0.0.27: faz upload para Firebase Storage e salva URL permanente
-        // URI local some quando o app fecha — URL do Storage persiste sempre
         const storage = getStorage(firebaseApp);
         const resp = await fetch(uri);
         const blob = await resp.blob();
         const storageRef = sRef(storage, `fotos/${authUser.uid}/perfil.jpg`);
         await uploadBytes(storageRef, blob);
         const downloadURL = await getDownloadURL(storageRef);
-        // Salva URL permanente no perfil do usuário
         await update(ref(db, `usuarios/${authUser.uid}`), { fotoPerfil: downloadURL });
-        // Salva também no casal se pareado
         if (casalId) {
           await set(ref(db, `casais/${casalId}/fotos/${authUser.uid}`), downloadURL);
         }
         setFotos(prev => ({ ...prev, [authUser.uid]: downloadURL }));
+        setPerfil(p => ({ ...p, fotoPerfil: downloadURL }));
         Alert.alert('✅ Foto atualizada!');
       } catch(e) {
-        // Fallback: salva URI local se upload falhar (comportamento anterior)
-        await update(ref(db, `usuarios/${authUser.uid}`), { fotoPerfil: uri });
-        if (casalId) await set(ref(db, `casais/${casalId}/fotos/${authUser.uid}`), uri);
-        setFotos(prev => ({ ...prev, [authUser.uid]: uri }));
-        Alert.alert('⚠️ Foto salva localmente', 'Upload falhou. A foto pode sumir ao fechar o app.');
+        console.warn('Upload foto falhou:', e);
+        Alert.alert('Erro no upload', 'Não foi possível salvar a foto. Verifique sua conexão e tente novamente.');
       }
     }
   }
@@ -2695,21 +2700,34 @@ O relatório será salvo no app.`;
     setOtaProgress(0.01);
     const destino = FileSystem.documentDirectory + 'update.apk';
     try {
-      const dl = FileSystem.createDownloadResumable(otaInfo.apkUrl, destino, {},
+      // Resolve redirects (GitHub Releases redireciona — createDownloadResumable não segue)
+      let urlFinal = otaInfo.apkUrl;
+      try {
+        const check = await fetch(otaInfo.apkUrl, { method: 'HEAD' });
+        if (check.url && check.url !== otaInfo.apkUrl) urlFinal = check.url;
+      } catch(_) { urlFinal = otaInfo.apkUrl; }
+
+      const dl = FileSystem.createDownloadResumable(urlFinal, destino, {},
         ({ totalBytesWritten, totalBytesExpectedToWrite }) => {
-          setOtaProgress(totalBytesWritten / totalBytesExpectedToWrite);
+          if (totalBytesExpectedToWrite > 0)
+            setOtaProgress(totalBytesWritten / totalBytesExpectedToWrite);
         });
-      const { uri } = await dl.downloadAsync();
+      const result = await dl.downloadAsync();
+      if (!result?.uri) throw new Error('URI vazio');
       setOtaProgress(1);
       Alert.alert('Download concluído! 🎉', 'Toque em OK para instalar.', [{
         text: 'OK', onPress: async () => {
           await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
-            data: uri, flags: 1, type: 'application/vnd.android.package-archive',
+            data: result.uri, flags: 1, type: 'application/vnd.android.package-archive',
           });
           setModalOta(false); setOtaProgress(0);
         },
       }]);
-    } catch(e) { Alert.alert('Erro', 'Não foi possível baixar.'); setOtaProgress(0); }
+    } catch(e) {
+      console.error('OTA erro:', e);
+      Alert.alert('Erro', 'Não foi possível baixar a atualização.');
+      setOtaProgress(0);
+    }
   }
 
   function ignorarOta() { versaoIgnoradaRef.current = otaInfo?.versao; setModalOta(false); }
@@ -2796,6 +2814,24 @@ O relatório será salvo no app.`;
           </TouchableOpacity>
           {!otaInfo?.forcarAtualizar && <TouchableOpacity style={s.btnSecondary} onPress={ignorarOta}><Text style={s.btnSecondaryTxt}>Lembrar depois</Text></TouchableOpacity>}
         </View></View>
+      </Modal>
+
+      {/* Modal Notificação interna — aparece quando app está aberto */}
+      <Modal transparent visible={notifModal} animationType="fade" onRequestClose={() => setNotifModal(false)}>
+        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setNotifModal(false)}>
+          <View style={{ position: 'absolute', top: 60, left: 16, right: 16,
+            backgroundColor: tema.card, borderRadius: 16, padding: 16,
+            borderWidth: 1, borderColor: tema.primary,
+            shadowColor: tema.primary, shadowOpacity: 0.4, shadowRadius: 12, elevation: 10,
+            flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={{ fontSize: 28, marginRight: 12 }}>🔔</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>{notifInfo.title}</Text>
+              <Text style={{ color: tema.sub, fontSize: 12, marginTop: 3 }}>{notifInfo.body}</Text>
+            </View>
+            <Text style={{ color: tema.sub, fontSize: 18, paddingLeft: 8 }}>✕</Text>
+          </View>
+        </TouchableOpacity>
       </Modal>
 
       {/* Modal Item Explorado pelo Pet */}
@@ -2947,21 +2983,56 @@ O relatório será salvo no app.`;
       <Modal transparent visible={modalConectar} animationType="slide">
         <View style={s.modalWrap}><View style={s.modalCard}>
           <Text style={s.modalTitulo}>🔗 Conectar parceiro(a)</Text>
+
+          {/* Status de conexão — visível para ambos */}
+          {casalId && parceiro ? (
+            <View style={{ backgroundColor: '#00ff8722', borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: '#00ff87', alignItems: 'center' }}>
+              <Text style={{ fontSize: 28, marginBottom: 4 }}>💑</Text>
+              <Text style={{ color: '#00ff87', fontWeight: '900', fontSize: 15 }}>Vocês estão conectados!</Text>
+              <Text style={{ color: tema.sub, fontSize: 12, marginTop: 4 }}>Parceiro(a): {parceiro.nome}</Text>
+            </View>
+          ) : casalId && !parceiro ? (
+            <View style={{ backgroundColor: '#ffd60a22', borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: '#ffd60a', alignItems: 'center' }}>
+              <Text style={{ fontSize: 28, marginBottom: 4 }}>⏳</Text>
+              <Text style={{ color: '#ffd60a', fontWeight: '700', fontSize: 14 }}>Aguardando parceiro(a)...</Text>
+              <Text style={{ color: tema.sub, fontSize: 12, marginTop: 4 }}>Compartilhe o código abaixo</Text>
+            </View>
+          ) : null}
+
+          {/* Gerar código — disponível para qualquer um */}
           <TouchableOpacity style={s.btnPrimary} onPress={gerarCodigoConvite}>
-            <Text style={s.btnPrimaryTxt}>✨ Gerar código de convite</Text>
+            <Text style={s.btnPrimaryTxt}>✨ {codigoGerado ? 'Gerar novo código' : 'Gerar código de convite'}</Text>
           </TouchableOpacity>
           {codigoGerado !== '' && (
-            <View style={s.chaveBox}>
-              <Text style={s.chaveLabel}>Compartilhe este código:</Text>
+            <TouchableOpacity
+              style={[s.chaveBox, { marginTop: 8 }]}
+              onPress={() => {
+                const { Clipboard } = require('react-native');
+                try { Clipboard.setString(codigoGerado); } catch(_) {}
+                Alert.alert('📋 Copiado!', `Código ${codigoGerado} copiado para a área de transferência!`);
+              }}
+            >
+              <Text style={s.chaveLabel}>Toque para copiar:</Text>
               <Text style={s.chaveValor}>{codigoGerado}</Text>
-            </View>
+              <Text style={{ color: tema.sub, fontSize: 11, marginTop: 6 }}>📋 toque para copiar</Text>
+            </TouchableOpacity>
           )}
-          <Text style={[s.authSub, { marginVertical: 8 }]}>— ou inserir código recebido —</Text>
-          <TextInput style={[s.input, s.inputChave]} placeholder="Código 6 dígitos" placeholderTextColor="#555"
-            value={pairInput} onChangeText={t => setPairInput(t.toUpperCase())} maxLength={6} />
-          <TouchableOpacity style={s.btnPrimary} onPress={entrarCasal} disabled={pairLoading}>
-            <Text style={s.btnPrimaryTxt}>🔑 Entrar com código</Text>
-          </TouchableOpacity>
+
+          {/* Entrar com código — disponível para qualquer um sem casal */}
+          {!casalId && <>
+            <Text style={[s.authSub, { marginVertical: 12 }]}>— ou inserir código recebido —</Text>
+            <TextInput style={[s.input, s.inputChave]} placeholder="Código 6 dígitos" placeholderTextColor="#555"
+              value={pairInput} onChangeText={t => setPairInput(t.toUpperCase())} maxLength={6} />
+            <TouchableOpacity style={s.btnPrimary} onPress={entrarCasal} disabled={pairLoading}>
+              {pairLoading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnPrimaryTxt}>🔑 Entrar com código</Text>}
+            </TouchableOpacity>
+          </>}
+
+          {/* Se tem casal mas veio ver o código para o parceiro entrar */}
+          {casalId && !parceiro && <>
+            <Text style={[s.authSub, { marginVertical: 12 }]}>— ou seu parceiro(a) pode inserir o código acima —</Text>
+          </>}
+
           <TouchableOpacity style={s.btnSecondary} onPress={() => { setModalConectar(false); setCodigoGerado(''); setPairInput(''); }}>
             <Text style={s.btnSecondaryTxt}>Fechar</Text>
           </TouchableOpacity>
@@ -3074,7 +3145,13 @@ O relatório será salvo no app.`;
         <View style={s.modalWrap}>
           <ScrollView>
             <View style={s.modalCard}>
-              <Text style={s.modalTitulo}>🛒 Loja</Text>
+              {/* Botão fechar no topo */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={s.modalTitulo}>🛒 Loja</Text>
+                <TouchableOpacity onPress={() => setModalLoja(false)} style={{ padding: 8 }}>
+                  <Text style={{ color: tema.sub, fontSize: 22, fontWeight: '700' }}>✕</Text>
+                </TouchableOpacity>
+              </View>
               <Text style={[s.statsInfo, { marginBottom: 16 }]}>Seus Antrix: {antrix} 💠</Text>
 
               <Text style={s.catTitulo}>🎨 Temas Comuns — 20 💠</Text>
