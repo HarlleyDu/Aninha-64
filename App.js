@@ -1,11 +1,11 @@
 // ============================================================
 // DuoTrack — App.js
-// Versão: alpha 0.0.41
+// Versão: alpha 0.0.42
 // ============================================================
 //
 // ════════════════════════════════════════════════════════════
 // 💊 DUOTRACK — DOSSIÊ DEFINITIVO v4.0
-// Atualizado até alpha 0.0.41 — passar para qualquer IA continuar.
+// Atualizado até alpha 0.0.42 — passar para qualquer IA continuar.
 // ════════════════════════════════════════════════════════════
 //
 // ┌─────────────────────────────────────────────────────────┐
@@ -313,7 +313,7 @@ try {
   console.error("Firebase Init Error:", e);
 }
 
-const VERSAO_ATUAL  = "alpha 0.0.41";
+const VERSAO_ATUAL  = "alpha 0.0.42";
 const ADMIN_EMAIL   = "Harlleyduarte@gmail.com";
 
 // ── Sistema de Pet ──────────────────────────────────────────────
@@ -633,22 +633,41 @@ Notifications.setNotificationHandler({
 function PetOrbital({ pet, tamanho = 100, mostrarParceiro = false, petParceiro = null }) {
   const orbitAnim = useRef(new Animated.Value(0)).current;
   const floatAnim = useRef(new Animated.Value(0)).current;
+  
+  // Para movimento aleatório (Ovo)
+  const randomX = useRef(new Animated.Value(0)).current;
+  const randomY = useRef(new Animated.Value(0)).current;
+  const randomZ = useRef(new Animated.Value(10)).current; // zIndex
 
   useEffect(() => {
-    Animated.loop(
-      Animated.timing(orbitAnim, { toValue: 1, duration: 8000, useNativeDriver: false })
-    ).start();
+    if (pet?.fase === 1) {
+      // Movimento Errático para o Ovo
+      const moveRandom = () => {
+        const toX = (Math.random() - 0.5) * tamanho * 1.2;
+        const toY = (Math.random() - 0.5) * tamanho * 1.2;
+        const toZ = Math.random() > 0.5 ? 10 : -10; // Alterna frente/trás
+        
+        Animated.parallel([
+          Animated.timing(randomX, { toValue: toX, duration: 2000 + Math.random() * 2000, useNativeDriver: false }),
+          Animated.timing(randomY, { toValue: toY, duration: 2000 + Math.random() * 2000, useNativeDriver: false }),
+          Animated.timing(randomZ, { toValue: toZ, duration: 1000, useNativeDriver: false }),
+        ]).start(() => moveRandom());
+      };
+      moveRandom();
+    } else {
+      // Órbita 3D para Pets evoluídos
+      Animated.loop(
+        Animated.timing(orbitAnim, { toValue: 1, duration: 8000, useNativeDriver: false })
+      ).start();
+    }
+    
     Animated.loop(Animated.sequence([
       Animated.timing(floatAnim, { toValue: -6, duration: 1000, useNativeDriver: false }),
       Animated.timing(floatAnim, { toValue: 0, duration: 1000, useNativeDriver: false }),
     ])).start();
-  }, []);
+  }, [pet?.fase]);
 
   if (!pet) return null;
-
-  const raioX = tamanho * 0.75;
-  const raioY = tamanho * 0.35;
-  const INCL = 0.42; 
 
   const renderPet = (p, offset = 0) => {
     if (!p) return null;
@@ -656,32 +675,45 @@ function PetOrbital({ pet, tamanho = 100, mostrarParceiro = false, petParceiro =
     const tInfo = PET_TIPOS[p.tipo] || PET_TIPOS.fogo;
     const cor = p.humor === 'triste' ? '#888' : tInfo.cor;
     
-    const pos = orbitAnim.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0 + offset, (Math.PI * 2) + offset]
-    });
+    let left, top, zIndex, scale;
 
-    const left = pos.interpolate({
-      inputRange: [0, Math.PI/2, Math.PI, 3*Math.PI/2, Math.PI*2],
-      outputRange: [raioX, 0, -raioX, 0, raioX]
-    });
+    if (p.fase === 1) {
+      // Ovo: Posições aleatórias
+      left = randomX;
+      top = randomY;
+      zIndex = randomZ;
+      scale = 1;
+    } else {
+      // Evoluído: Órbita 3D
+      const raioX = tamanho * 0.75;
+      const raioY = tamanho * 0.35;
+      const INCL = 0.42;
+      
+      const pos = orbitAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0 + offset, (Math.PI * 2) + offset]
+      });
 
-    const top = pos.interpolate({
-      inputRange: [0, Math.PI/2, Math.PI, 3*Math.PI/2, Math.PI*2],
-      outputRange: [0, raioY * Math.cos(INCL), 0, -raioY * Math.cos(INCL), 0]
-    });
+      left = pos.interpolate({
+        inputRange: [0, Math.PI/2, Math.PI, 3*Math.PI/2, Math.PI*2],
+        outputRange: [raioX, 0, -raioX, 0, raioX]
+      });
 
-    const scale = pos.interpolate({
-      inputRange: [0, Math.PI/2, Math.PI, 3*Math.PI/2, Math.PI*2],
-      outputRange: [1, 1.2, 1, 0.8, 1]
-    });
+      top = pos.interpolate({
+        inputRange: [0, Math.PI/2, Math.PI, 3*Math.PI/2, Math.PI*2],
+        outputRange: [0, raioY * Math.cos(INCL), 0, -raioY * Math.cos(INCL), 0]
+      });
 
-    // zIndex dinâmico: > 0 na frente (10), < 0 atrás (-10)
-    // No RN, zIndex negativo em relação ao irmão funciona se o pai permitir.
-    const zIndex = pos.interpolate({
-      inputRange: [0, Math.PI/2, Math.PI, 3*Math.PI/2, Math.PI*2],
-      outputRange: [1, 10, 1, -10, 1]
-    });
+      scale = pos.interpolate({
+        inputRange: [0, Math.PI/2, Math.PI, 3*Math.PI/2, Math.PI*2],
+        outputRange: [1, 1.2, 1, 0.8, 1]
+      });
+
+      zIndex = pos.interpolate({
+        inputRange: [0, Math.PI/2, Math.PI, 3*Math.PI/2, Math.PI*2],
+        outputRange: [1, 10, 1, -10, 1]
+      });
+    }
 
     return (
       <Animated.View style={{
@@ -717,8 +749,6 @@ function PetOrbital({ pet, tamanho = 100, mostrarParceiro = false, petParceiro =
       height: tamanho,
       alignItems: 'center',
       justifyContent: 'center',
-      // O container não deve ter zIndex fixo para permitir que os filhos 
-      // fiquem atrás da foto que está no mesmo nível hierárquico.
     }}>
       {renderPet(pet, 0)}
       {mostrarParceiro && petParceiro && renderPet(petParceiro, Math.PI)}
@@ -731,27 +761,33 @@ function BannerPerfil({ pet, tema }) {
   const tInfo = PET_TIPOS[pet.tipo] || PET_TIPOS.fogo;
   const cor = tInfo.cor;
   const isSecreto = pet.tipo.includes('secreto');
+  const isFofo = pet.tipo === 'fofo';
   
+  // Título unificado
+  let titulo = isSecreto 
+    ? (isFofo ? '✧ GUARDIÃO DO AMOR ✧' : '✧ PORTADOR DAS SOMBRAS ✧')
+    : `✦ MESTRE DE ${pet.tipo.toUpperCase()} ✦`;
+
   return (
     <View style={{
       width: '100%',
-      height: 40,
+      height: 36,
       borderTopLeftRadius: 24,
       borderTopRightRadius: 24,
-      marginBottom: -20,
+      marginBottom: -18,
       overflow: 'hidden',
-      backgroundColor: cor + '10',
+      backgroundColor: cor + '15',
       borderBottomWidth: 1,
       borderBottomColor: cor + '22',
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
     }}>
-      <View style={{ position: 'absolute', left: 0, width: '20%', height: '100%', backgroundColor: cor + '15' }} />
-      <View style={{ position: 'absolute', right: 0, width: '20%', height: '100%', backgroundColor: cor + '15' }} />
+      <View style={{ position: 'absolute', left: 0, width: '15%', height: '100%', backgroundColor: cor + '10' }} />
+      <View style={{ position: 'absolute', right: 0, width: '15%', height: '100%', backgroundColor: cor + '10' }} />
       
-      <Text style={{ color: cor, fontWeight: '900', fontSize: 9, letterSpacing: 3, textTransform: 'uppercase', opacity: 0.7 }}>
-        {isSecreto ? '✧ GUARDIÃO LENDÁRIO ✧' : `✦ MESTRE DE ${pet.tipo} ✦`}
+      <Text style={{ color: cor, fontWeight: '900', fontSize: 8.5, letterSpacing: 4, textTransform: 'uppercase', opacity: 0.8 }}>
+        {titulo}
       </Text>
     </View>
   );
@@ -3726,7 +3762,7 @@ O relatório será salvo no app.`;
           <View style={s.perfilCard}>
             <BannerPerfil pet={pet} tema={tema} />
             {/* Banner pet secreto */}
-            {pet?.bannerAtivo && <BannerPetSecreto tipo={pet.bannerAtivo} tema={tema} />}
+            
 
             {/* Foto com pet orbital */}
             <TouchableOpacity onPress={escolherFotoGaleria} style={{ position: 'relative', width: 100, height: 100 }}>
