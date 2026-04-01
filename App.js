@@ -1,11 +1,11 @@
 // ============================================================
 // DuoTrack — App.js
-// Versão: alpha 0.0.37
+// Versão: alpha 0.0.40
 // ============================================================
 //
 // ════════════════════════════════════════════════════════════
 // 💊 DUOTRACK — DOSSIÊ DEFINITIVO v4.0
-// Atualizado até alpha 0.0.37 — passar para qualquer IA continuar.
+// Atualizado até alpha 0.0.40 — passar para qualquer IA continuar.
 // ════════════════════════════════════════════════════════════
 //
 // ┌─────────────────────────────────────────────────────────┐
@@ -279,7 +279,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import * as FileSystem from 'expo-file-system';
 import * as IntentLauncher from 'expo-intent-launcher';
-import { LinearGradient } from 'expo-linear-gradient';
+
 import * as ImagePicker from 'expo-image-picker';
 import { initializeApp } from 'firebase/app';
 import {
@@ -313,7 +313,7 @@ try {
   console.error("Firebase Init Error:", e);
 }
 
-const VERSAO_ATUAL  = "alpha 0.0.37";
+const VERSAO_ATUAL  = "alpha 0.0.40";
 const ADMIN_EMAIL   = "Harlleyduarte@gmail.com";
 
 // ── Sistema de Pet ──────────────────────────────────────────────
@@ -739,20 +739,17 @@ function BannerPerfil({ pet, tema }) {
       borderRadius: 16,
       marginBottom: -30,
       overflow: 'hidden',
-      backgroundColor: cor + '22',
+      backgroundColor: cor + '15',
       borderWidth: 1,
-      borderColor: cor + '44',
+      borderColor: cor + '33',
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
     }}>
-      <LinearGradient
-        colors={[cor + '44', 'transparent', cor + '44']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={{ position: 'absolute', width: '100%', height: '100%' }}
-      />
-      <Text style={{ color: cor, fontWeight: '900', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', opacity: 0.8 }}>
+      <View style={{ position: 'absolute', left: 0, width: '30%', height: '100%', backgroundColor: cor + '22' }} />
+      <View style={{ position: 'absolute', right: 0, width: '30%', height: '100%', backgroundColor: cor + '22' }} />
+      
+      <Text style={{ color: cor, fontWeight: '900', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', opacity: 0.9 }}>
         {isSecreto ? '✧ GUARDIÃO LENDÁRIO ✧' : `✦ MESTRE DE ${pet.tipo} ✦`}
       </Text>
     </View>
